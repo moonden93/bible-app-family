@@ -1164,8 +1164,8 @@ function saveToCloud(patch) {
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-stone-200">
         <div className="max-w-3xl mx-auto grid grid-cols-4">
-          <NavBtn icon={<BookOpen size={20} strokeWidth={1.75} />} label="본문" active={view === 'read'} onClick={() => setView('read')} />
           <NavBtn icon={<Calendar size={20} strokeWidth={1.75} />} label="계획" active={view === 'plan'} onClick={() => setView('plan')} />
+          <NavBtn icon={<BookOpen size={20} strokeWidth={1.75} />} label="본문" active={view === 'read'} onClick={() => setView('read')} />
           <NavBtn icon={<NotebookPen size={20} strokeWidth={1.75} />} label="일기" active={view === 'journal'} onClick={() => setView('journal')} badge={journals.length} />
           <NavBtn icon={<Heart size={20} strokeWidth={1.75} />} label="기도" active={view === 'prayer'} onClick={() => setView('prayer')} badge={prayers.filter(p => p.status === 'progress').length} />
         </div>
@@ -1402,7 +1402,7 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, chapterProgressP
 // ============================================================
 // 필사 뷰 (전체 화면)
 // ============================================================
-function WriteView({ book, chapterNum, chapterData, isCompleted, chapterProgressPct, onStartWriting, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
+function WriteView({ book, chapterNum, chapterData, transcripts, updateTranscript, isCompleted, onToggleComplete, completedBy, onClose, onPrevChapter, onNextChapter, onAddJournal, onUpdateJournal, onDeleteJournal, chapterJournals, getUserColor, getUserInfo, fontSizeIdx, setFontSizeIdx, currentUid, comments, addComment, deleteComment }) {
   const [journalDraft, setJournalDraft] = useState('');
   const [showJournalForm, setShowJournalForm] = useState(false);
   const [localDrafts, setLocalDrafts] = useState({}); // 로컬 입력 버퍼 (타이핑 중)
