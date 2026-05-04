@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  BookOpen, Calendar, NotebookPen, Upload, ChevronLeft, ChevronRight,
-  Check, Flame, Search, Download, Trash2, X, Menu, Star,
-  Type, Share2, CheckCircle2, Bookmark, Plus, Sunrise, LogOut, Cloud, CloudOff,
-  PenLine, Users, Heart, MessageCircle, Copy, UserPlus, Palette,
-  Send, MoreVertical, Home, Edit2
+  BookOpen, Calendar, NotebookPen, ChevronLeft, ChevronRight,
+  Check, Search, Trash2, X, Menu, Star,
+  Type, Share2, CheckCircle2, Plus, Sunrise, LogOut, Cloud, CloudOff,
+  Users, Heart, MessageCircle, Copy, UserPlus, Palette,
+  Send, Edit2
 } from 'lucide-react';
 
 import { auth, db, googleProvider } from './firebase';
@@ -224,8 +224,8 @@ function LoginScreen({ onLogin, pendingInviteCode }) {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-stone-900 text-stone-50 mb-6">
             <BookOpen size={36} strokeWidth={1.5} />
           </div>
-          <h1 className="text-4xl font-bold text-stone-900 tracking-tight mb-3">필사 (筆寫)</h1>
-          <p className="text-stone-500 text-base leading-relaxed">가족과 함께 쓰는 말씀 일기</p>
+          <h1 className="text-4xl font-bold text-stone-900 tracking-tight mb-3">말씀</h1>
+          <p className="text-stone-500 text-base leading-relaxed">가족과 함께 읽는 말씀</p>
         </div>
 
         {pendingInviteCode && (
@@ -289,7 +289,6 @@ function FamilySetupScreen({ user, pendingInviteCode, onJoined }) {
         createdAt: serverTimestamp(),
         inviteCode: code,
         members: [member],
-        transcripts: {},
         journals: [],
         bookmarks: [],
         completed: [],
@@ -518,7 +517,7 @@ function BibleApp({ user, familyId, onLeaveFamily }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const [view, setView] = useState('read'); // read | plan | journal | prayer | settings | write
+  const [view, setView] = useState('plan'); // plan | read | journal | prayer | settings
   const [bookId, setBookId] = useState(101);
   const [chapter, setChapter] = useState(1);
   const [fontSizeIdx, setFontSizeIdx] = useState(1);
@@ -660,7 +659,6 @@ function saveToCloud(patch) {
   const currentBook = bookMap[bookId];
   const currentChapter = currentBook?.c[chapter - 1];
 
-  const transcripts = familyData?.transcripts || {};
   const journals = familyData?.journals || [];
   const bookmarks = familyData?.bookmarks || [];
   const completedList = familyData?.completed || [];
@@ -669,30 +667,6 @@ function saveToCloud(patch) {
   const dailyProverbs = !!familyData?.dailyProverbs;
   const prayers = familyData?.prayers || [];
   const comments = familyData?.comments || {};
-
-  function chapterProgress(bId, ch) {
-    const book = bookMap[bId];
-    if (!book) return 0;
-    const verses = book.c[ch - 1]?.v || [];
-    if (verses.length === 0) return 0;
-    let filled = 0;
-    verses.forEach((_, i) => {
-      const k = `${bId}-${ch}-${i + 1}`;
-      if (transcripts[k]?.text && transcripts[k].text.trim().length > 0) filled++;
-    });
-    return filled / verses.length;
-  }
-
-  function updateTranscript(bId, ch, verseNum, text) {
-    const k = `${bId}-${ch}-${verseNum}`;
-    const newTranscripts = { ...transcripts };
-    if (text && text.trim()) {
-      newTranscripts[k] = { text, byUid: user.uid, updatedAt: new Date().toISOString() };
-    } else {
-      delete newTranscripts[k];
-    }
-    saveToCloud({ transcripts: newTranscripts });
-  }
 
   function toggleChapterComplete(bId, ch) {
     const k = `${bId}-${ch}`;
@@ -831,18 +805,16 @@ function saveToCloud(patch) {
   }, [bible, searchQuery]);
 
   const stats = useMemo(() => {
-    if (!bible) return { totalChapters: 0, completedCount: 0, transcribedVerses: 0, journalCount: 0, prayerCount: 0, answeredCount: 0 };
+    if (!bible) return { totalChapters: 0, completedCount: 0, journalCount: 0, prayerCount: 0, answeredCount: 0 };
     const totalChapters = bible.books.reduce((s, b) => s + b.c.length, 0);
-    const transcribedVerses = Object.values(transcripts).filter(t => t?.text && t.text.trim()).length;
     return {
       totalChapters,
       completedCount: completedChapters.size,
-      transcribedVerses,
       journalCount: journals.length,
       prayerCount: prayers.length,
       answeredCount: prayers.filter(p => p.status === 'answered').length,
     };
-  }, [bible, completedChapters, transcripts, journals, prayers]);
+  }, [bible, completedChapters, journals, prayers]);
 
   const planInfo = useMemo(() => {
     if (!activePlan || !bible) return null;
@@ -873,10 +845,10 @@ function saveToCloud(patch) {
     }
   }
 
-  function startWriting(bId, ch) {
+  function openChapter(bId, ch) {
     setBookId(bId);
     setChapter(ch);
-    setView('write');
+    setView('read');
   }
 
   if (bibleLoading || dataLoading) {
@@ -904,49 +876,6 @@ function saveToCloud(patch) {
     );
   }
 
-  // 필사 모드 (전체 화면)
-  if (view === 'write' && currentChapter) {
-    return (
-      <WriteView
-        book={currentBook}
-        chapterNum={chapter}
-        chapterData={currentChapter}
-        transcripts={transcripts}
-        updateTranscript={(vn, txt) => updateTranscript(bookId, chapter, vn, txt)}
-        isCompleted={completedChapters.has(`${bookId}-${chapter}`)}
-        onToggleComplete={() => toggleChapterComplete(bookId, chapter)}
-        completedBy={completedList.find(c => c.key === `${bookId}-${chapter}`)?.byUid}
-        onClose={() => setView('read')}
-        onPrevChapter={() => {
-          if (chapter > 1) setChapter(chapter - 1);
-          else {
-            const idx = BOOK_ORDER.indexOf(bookId);
-            if (idx > 0) { setBookId(BOOK_ORDER[idx - 1]); setChapter(bookMap[BOOK_ORDER[idx - 1]].c.length); }
-          }
-        }}
-        onNextChapter={() => {
-          if (chapter < currentBook.c.length) setChapter(chapter + 1);
-          else {
-            const idx = BOOK_ORDER.indexOf(bookId);
-            if (idx < BOOK_ORDER.length - 1) { setBookId(BOOK_ORDER[idx + 1]); setChapter(1); }
-          }
-        }}
-        onAddJournal={addJournal}
-        chapterJournals={journals.filter(j => j.bookId === bookId && j.chapter === chapter)}
-        getUserColor={getUserColor}
-        getUserInfo={getUserInfo}
-        fontSizeIdx={fontSizeIdx}
-        setFontSizeIdx={setFontSizeIdx}
-        currentUid={user.uid}
-        comments={comments}
-        addComment={addComment}
-        deleteComment={deleteComment}
-        onDeleteJournal={deleteJournal}
-        onUpdateJournal={updateJournal}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen w-full bg-stone-50 text-stone-900" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
       {showSidebar && (
@@ -962,7 +891,6 @@ function saveToCloud(patch) {
               currentBookId={bookId}
               currentChapter={chapter}
               onSelect={(bId, ch) => { setBookId(bId); setChapter(ch); setShowSidebar(false); setView('read'); }}
-              chapterProgress={chapterProgress}
               completedChapters={completedChapters}
             />
           </div>
@@ -1045,8 +973,8 @@ function saveToCloud(patch) {
             chapterNum={chapter}
             chapterData={currentChapter}
             isCompleted={completedChapters.has(`${bookId}-${chapter}`)}
-            chapterProgressPct={chapterProgress(bookId, chapter)}
-            onStartWriting={() => setView('write')}
+            onToggleComplete={() => toggleChapterComplete(bookId, chapter)}
+            completedBy={completedList.find(c => c.key === `${bookId}-${chapter}`)?.byUid}
             onPrevChapter={() => {
               if (chapter > 1) setChapter(chapter - 1);
               else {
@@ -1095,7 +1023,7 @@ function saveToCloud(patch) {
             setDailyProverbs={(v) => saveToCloud({ dailyProverbs: v })}
             todayProverbsCh={todayProverbsCh}
             completedChapters={completedChapters}
-            onSelectChapter={(bId, ch) => startWriting(bId, ch)}
+            onSelectChapter={openChapter}
             stats={stats}
             planInfo={planInfo}
           />
@@ -1226,7 +1154,7 @@ function NavBtn({ icon, label, active, onClick, badge }) {
   );
 }
 
-function BookList({ bible, currentBookId, currentChapter, onSelect, chapterProgress, completedChapters }) {
+function BookList({ bible, currentBookId, currentChapter, onSelect, completedChapters }) {
   const [expandedBook, setExpandedBook] = useState(currentBookId);
   const otBooks = bible.books.filter(b => b.t === 'OT');
   const ntBooks = bible.books.filter(b => b.t === 'NT');
@@ -1248,12 +1176,11 @@ function BookList({ bible, currentBookId, currentChapter, onSelect, chapterProgr
                   <div className="px-4 py-2 bg-stone-50 grid grid-cols-8 gap-1.5">
                     {b.c.map((_, i) => {
                       const ch = i + 1;
-                      const prog = chapterProgress(b.id, ch);
                       const done = completedChapters.has(`${b.id}-${ch}`);
                       const isThis = b.id === currentBookId && ch === currentChapter;
                       return (
                         <button key={ch} onClick={() => onSelect(b.id, ch)} className={`relative aspect-square text-xs rounded-md font-medium transition-all
-                          ${isThis ? 'bg-stone-900 text-white' : done ? 'bg-emerald-500 text-white' : prog > 0 ? 'bg-amber-100 text-stone-900' : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200'}`}>
+                          ${isThis ? 'bg-stone-900 text-white' : done ? 'bg-emerald-500 text-white' : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200'}`}>
                           {ch}
                         </button>
                       );
@@ -1278,12 +1205,12 @@ function BookList({ bible, currentBookId, currentChapter, onSelect, chapterProgr
 // ============================================================
 // 본문 읽기 뷰
 // ============================================================
-function ReadView({ book, chapterNum, chapterData, isCompleted, chapterProgressPct, onStartWriting, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
+function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete, completedBy, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
   const verses = chapterData.v;
   const headings = chapterData.h || {};
-  const pct = Math.round(chapterProgressPct * 100);
   const [journalDraft, setJournalDraft] = useState('');
   const [showJournalForm, setShowJournalForm] = useState(false);
+  const completedByInfo = completedBy && completedBy !== currentUid ? getUserInfo(completedBy) : null;
 
   return (
     <div>
@@ -1306,15 +1233,24 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, chapterProgressP
         )}
       </div>
 
-      <button onClick={onStartWriting} className="w-full flex items-center justify-center gap-2 py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 transition-colors mb-4">
-        <PenLine size={18} strokeWidth={2} />
-        <span>이 장 필사하기</span>
-        {(isCompleted || pct > 0) && (
-          <span className={`text-xs px-2 py-0.5 rounded-full ml-2 ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-            {isCompleted ? '완료' : `${pct}%`}
-          </span>
-        )}
+      <button
+        onClick={onToggleComplete}
+        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium transition-colors mb-4 ${
+          isCompleted
+            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+            : 'bg-stone-900 text-white hover:bg-stone-800'
+        }`}
+      >
+        <Check size={18} strokeWidth={2.5} />
+        <span>{isCompleted ? '읽기 완료됨' : '읽기 완료로 표시'}</span>
       </button>
+
+      {completedByInfo && (
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-800 flex items-center gap-2">
+          <Check size={16} />
+          {completedByInfo.displayName || '가족'}님이 이 장을 완료로 표시했어요
+        </div>
+      )}
 
       <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
         <div className="space-y-5">
@@ -1395,168 +1331,6 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, chapterProgressP
           다음 장 <ChevronRight size={18} />
         </button>
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// 필사 뷰 (전체 화면)
-// ============================================================
-function WriteView({ book, chapterNum, chapterData, transcripts, updateTranscript, isCompleted, onToggleComplete, completedBy, onClose, onPrevChapter, onNextChapter, onAddJournal, onUpdateJournal, onDeleteJournal, chapterJournals, getUserColor, getUserInfo, fontSizeIdx, setFontSizeIdx, currentUid, comments, addComment, deleteComment }) {
-  const [journalDraft, setJournalDraft] = useState('');
-  const [showJournalForm, setShowJournalForm] = useState(false);
-  const [localDrafts, setLocalDrafts] = useState({}); // 로컬 입력 버퍼 (타이핑 중)
-  const debounceTimers = useRef({});
-  const verses = chapterData.v;
-  const headings = chapterData.h || {};
-  const fontSizeClass = FONT_SIZES[fontSizeIdx].verseClass;
-
-  function handleInput(verseNum, text) {
-    setLocalDrafts(prev => ({ ...prev, [verseNum]: text }));
-    if (debounceTimers.current[verseNum]) clearTimeout(debounceTimers.current[verseNum]);
-    debounceTimers.current[verseNum] = setTimeout(() => {
-      updateTranscript(verseNum, text);
-    }, 600);
-  }
-
-  function getDisplayValue(verseNum) {
-    if (localDrafts[verseNum] !== undefined) return localDrafts[verseNum];
-    const k = `${book.id}-${chapterNum}-${verseNum}`;
-    return transcripts[k]?.text || '';
-  }
-
-  const filledCount = verses.filter((_, i) => {
-    const val = getDisplayValue(i + 1);
-    return val && val.trim();
-  }).length;
-
-  return (
-    <div className="min-h-screen w-full bg-white text-stone-900" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-          <button onClick={onClose} className="p-2 -ml-2 hover:bg-stone-100 rounded-lg flex items-center gap-1 text-sm font-medium text-stone-600">
-            <ChevronLeft size={20} /> 본문
-          </button>
-          <div className="flex-1 text-center min-w-0">
-            <div className="flex items-center justify-center gap-2">
-              <PenLine size={14} strokeWidth={2} className="text-stone-400" />
-              <h1 className="text-sm font-semibold tracking-tight truncate">{book.n} {chapterNum}장 필사</h1>
-            </div>
-            <div className="text-xs text-stone-400 mt-0.5">{filledCount} / {verses.length}절 ({Math.round(filledCount / verses.length * 100)}%)</div>
-          </div>
-          <div className="flex items-center gap-1">
-            <FontSizeButton fontSizeIdx={fontSizeIdx} setFontSizeIdx={setFontSizeIdx} />
-            <button onClick={onToggleComplete} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
-              <Check size={13} strokeWidth={2.5} />
-              {isCompleted ? '완료' : '완료'}
-            </button>
-          </div>
-        </div>
-        <div className="h-1 bg-stone-100 overflow-hidden">
-          <div className="h-full bg-stone-900 transition-all duration-500" style={{ width: `${verses.length ? (filledCount / verses.length * 100) : 0}%` }} />
-        </div>
-      </header>
-
-      {isCompleted && completedBy && completedBy !== currentUid && (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-800 flex items-center gap-2">
-            <Check size={16} />
-            {getUserInfo(completedBy)?.displayName || '가족'}님이 이 장을 완료로 표시했어요
-          </div>
-        </div>
-      )}
-
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-24">
-        <div className="space-y-8">
-          {verses.map((text, i) => {
-            const verseNum = i + 1;
-            const k = `${book.id}-${chapterNum}-${verseNum}`;
-            const heading = headings[String(verseNum)];
-            const rec = transcripts[k];
-            const recBy = rec?.byUid;
-            const recColor = recBy ? getUserColor(recBy) : null;
-            const isFilled = !!(getDisplayValue(verseNum) && getDisplayValue(verseNum).trim());
-            return (
-              <div key={verseNum}>
-                {heading && (<h3 className="text-base font-bold text-stone-700 mb-4 mt-4 pb-2 border-b border-stone-200 tracking-tight">{heading}</h3>)}
-                <div className={`rounded-xl p-4 mb-2 border transition-colors ${isFilled ? 'bg-stone-50 border-stone-200' : 'bg-amber-50/50 border-amber-100'}`}>
-                  <div className="flex items-start gap-3">
-                    <span className={`text-xs font-bold mt-1 w-5 text-right shrink-0 ${isFilled ? 'text-stone-400' : 'text-amber-600'}`}>{verseNum}</span>
-                    <p className={`text-stone-700 leading-loose flex-1 ${fontSizeClass}`} style={{ wordBreak: 'keep-all' }}>{text}</p>
-                    {isFilled && <Check size={14} strokeWidth={2.5} className="text-emerald-500 mt-1.5 shrink-0" />}
-                  </div>
-                </div>
-                <textarea
-                  value={getDisplayValue(verseNum)}
-                  onChange={e => handleInput(verseNum, e.target.value)}
-                  placeholder={`${verseNum}절을 따라 써보세요…`}
-                  rows={3}
-                  className={`w-full bg-white border-2 rounded-xl p-4 leading-loose text-stone-900 focus:outline-none resize-none transition-colors ${fontSizeClass}`}
-                  style={{
-                    wordBreak: 'keep-all',
-                    borderColor: recColor ? recColor.border + '60' : '#e7e5e4',
-                  }}
-                />
-                {recBy && recBy !== currentUid && (
-                  <div className="text-xs mt-1 flex items-center gap-1" style={{ color: recColor?.text }}>
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: recColor?.border }} />
-                    {getUserInfo(recBy)?.displayName}님의 필사
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* 묵상 섹션 */}
-        <div className="mt-16 pt-8 border-t border-stone-200">
-          <h3 className="text-sm font-bold text-stone-700 mb-3 px-1">
-            이 장의 묵상 {chapterJournals.length > 0 && `(${chapterJournals.length})`}
-          </h3>
-          {!showJournalForm ? (
-            <button onClick={() => setShowJournalForm(true)} className="w-full flex items-center justify-center gap-2 py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 mb-4">
-              <NotebookPen size={18} strokeWidth={1.75} /> 오늘의 묵상 기록하기
-            </button>
-          ) : (
-            <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-4">
-              <div className="text-xs text-stone-500 mb-3">{book.n} {chapterNum}장에 대한 묵상</div>
-              <textarea value={journalDraft} onChange={e => setJournalDraft(e.target.value)} placeholder="이 말씀을 통해 받은 마음을 적어보세요…" rows={6} className="w-full bg-stone-50 border border-stone-100 rounded-lg p-3 text-sm leading-relaxed focus:outline-none focus:border-stone-300 resize-none" />
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => { setShowJournalForm(false); setJournalDraft(''); }} className="flex-1 py-2.5 text-stone-600 hover:bg-stone-100 rounded-lg text-sm font-medium">취소</button>
-                <button onClick={() => { onAddJournal(journalDraft, book.id, chapterNum); setJournalDraft(''); setShowJournalForm(false); }} disabled={!journalDraft.trim()} className="flex-1 py-2.5 bg-stone-900 text-white rounded-lg text-sm font-medium disabled:opacity-30">저장</button>
-              </div>
-            </div>
-          )}
-
-          {chapterJournals.length > 0 && (
-            <div className="space-y-3">
-              {chapterJournals.map(j => (
-                <JournalCard
-                  key={j.id}
-                  journal={j}
-                  getUserColor={getUserColor}
-                  getUserInfo={getUserInfo}
-                  currentUid={currentUid}
-                  comments={comments[j.id] || []}
-                  addComment={(text) => addComment(j.id, text)}
-                  deleteComment={(cid) => deleteComment(j.id, cid)}
-                  onDelete={() => onDeleteJournal(j.id)}
-                  onUpdate={(content) => onUpdateJournal(j.id, content)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-3 mt-12">
-          <button onClick={onPrevChapter} className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-stone-200 rounded-xl font-medium text-stone-700 hover:bg-stone-50">
-            <ChevronLeft size={18} /> 이전 장
-          </button>
-          <button onClick={onNextChapter} className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-stone-200 rounded-xl font-medium text-stone-700 hover:bg-stone-50">
-            다음 장 <ChevronRight size={18} />
-          </button>
-        </div>
-      </main>
     </div>
   );
 }
@@ -1733,7 +1507,7 @@ function DailyProverbsCard({ todayProverbsCh, completedChapters, onSelect, onTog
       </div>
       <button onClick={onSelect} className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border transition-all ${done ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white border-amber-200 hover:border-amber-400'}`}>
         <div className="text-left min-w-0">
-          <div className={`text-xs font-medium mb-0.5 ${done ? 'text-emerald-50' : 'text-stone-500'}`}>{done ? '오늘 분량 완료!' : '오늘 필사할 분량'}</div>
+          <div className={`text-xs font-medium mb-0.5 ${done ? 'text-emerald-50' : 'text-stone-500'}`}>{done ? '오늘 분량 완료!' : '오늘 읽을 분량'}</div>
           <div className={`text-lg font-bold ${done ? 'text-white' : 'text-stone-900'}`}>잠언 {targetChapter}장</div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -1767,12 +1541,12 @@ function ActivePlanView({ activePlan, planInfo, bookMap, completedChapters, onSe
         </div>
         <div className="flex items-end justify-between mb-2">
           <div><div className="text-xs text-stone-500">날짜 진행</div><div className="text-2xl font-bold">{progress} <span className="text-sm font-normal text-stone-400">/ {totalDays}일</span></div></div>
-          <div className="text-right"><div className="text-xs text-stone-500">필사 완료</div><div className="text-2xl font-bold">{completedInPlan} <span className="text-sm font-normal text-stone-400">/ {totalChaptersInPlan}장</span></div></div>
+          <div className="text-right"><div className="text-xs text-stone-500">읽기 완료</div><div className="text-2xl font-bold">{completedInPlan} <span className="text-sm font-normal text-stone-400">/ {totalChaptersInPlan}장</span></div></div>
         </div>
         <div className="h-2 bg-stone-100 rounded-full overflow-hidden mb-3"><div className="h-full bg-stone-900 transition-all" style={{ width: `${(progress / totalDays) * 100}%` }} /></div>
         <div className="flex justify-between text-xs text-stone-400"><span>시작: {activePlan.startDate}</span><span>종료 예정: {endDate}</span></div>
       </div>
-      <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3 px-1">필사 일정</h3>
+      <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3 px-1">독서 일정</h3>
       <div className="space-y-3">
         {showDays.map(d => {
           const dayChapters = schedule[d] || [];
@@ -1800,7 +1574,7 @@ function ActivePlanView({ activePlan, planInfo, bookMap, completedChapters, onSe
                   const done = completedChapters.has(`${c.bookId}-${c.chapter}`);
                   return (
                     <button key={i} onClick={() => onSelectChapter(c.bookId, c.chapter)} className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${done ? 'bg-emerald-500 text-white' : 'bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200'}`}>
-                      {!done && <PenLine size={12} strokeWidth={2} />}
+                      {!done && <BookOpen size={12} strokeWidth={2} />}
                       {book.n} {c.chapter}장
                     </button>
                   );
@@ -1816,13 +1590,12 @@ function ActivePlanView({ activePlan, planInfo, bookMap, completedChapters, onSe
 
 function PlanStatsBar({ stats }) {
   const items = [
-    { label: '필사 절', value: stats.transcribedVerses.toLocaleString() },
     { label: '완료 장', value: `${stats.completedCount} / ${stats.totalChapters}` },
     { label: '묵상', value: stats.journalCount },
     { label: '기도', value: `${stats.answeredCount} / ${stats.prayerCount}` },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {items.map((it, i) => (
         <div key={i} className="bg-white border border-stone-200 rounded-xl p-3">
           <div className="text-xs text-stone-400 mb-1">{it.label}</div>
@@ -2575,7 +2348,7 @@ function ShareCardModal({ card, onClose }) {
   <defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fafaf9"/><stop offset="100%" stop-color="#e7e5e4"/></linearGradient></defs>
   <rect width="${w}" height="${h}" fill="url(#bg)"/>
   <rect x="60" y="60" width="${w-120}" height="${h-120}" fill="none" stroke="#1c1917" stroke-width="2"/>
-  <text x="${w/2}" y="160" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="24" font-weight="700" fill="#78716c" letter-spacing="8">FILSA · 筆寫</text>
+  <text x="${w/2}" y="160" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="24" font-weight="700" fill="#78716c" letter-spacing="8">말씀</text>
   ${lines.map((line, i) => `<text x="${w/2}" y="${startY + i * lineH}" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="36" font-weight="500" fill="#1c1917">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>`).join('\n  ')}
   <text x="${w/2}" y="${h - 140}" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="28" font-weight="700" fill="#1c1917">${verseLabel}</text>
   <text x="${w/2}" y="${h - 100}" text-anchor="middle" font-family="Noto Sans KR, sans-serif" font-size="18" font-weight="400" fill="#a8a29e">개역개정</text>
@@ -2614,7 +2387,7 @@ function ShareCardModal({ card, onClose }) {
       <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-stone-50 to-stone-200 p-8 aspect-[4/5] flex flex-col" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
           <div className="border-2 border-stone-900 flex flex-col justify-between p-6 h-full">
-            <div className="text-center text-xs font-bold text-stone-500 tracking-[0.4em]">FILSA · 筆寫</div>
+            <div className="text-center text-xs font-bold text-stone-500 tracking-[0.4em]">말씀</div>
             <p className="text-center text-stone-900 text-lg font-medium leading-relaxed" style={{ wordBreak: 'keep-all' }}>{card.text}</p>
             <div className="text-center">
               <div className="text-base font-bold text-stone-900 tracking-tight">{card.bookName} {card.chapter}:{card.verse}</div>
