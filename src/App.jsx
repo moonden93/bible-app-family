@@ -4,7 +4,7 @@ import {
   Check, Search, Trash2, X, Menu, Star,
   Type, Share2, CheckCircle2, Plus, Sunrise, LogOut, Cloud, CloudOff,
   Users, Heart, MessageCircle, Copy, UserPlus, Palette,
-  Send, Edit2
+  Send, Edit2, Bell, BellOff
 } from 'lucide-react';
 
 import { auth, db, googleProvider } from './firebase';
@@ -296,6 +296,8 @@ function FamilySetupScreen({ user, pendingInviteCode, onJoined }) {
         dailyProverbs: false,
         prayers: [],
         comments: {}, // { journalId: [...], prayerId: [...] }
+        notifications: [], // 최근 50개 (묵상/기도 추가 시 누적)
+        notificationsReadAt: {}, // { [uid]: ISO 시각 } — 알림 패널 마지막 확인 시각
       });
       // 유저 → 가족방 매핑
       await setDoc(doc(db, 'userFamilies', user.uid), {
@@ -667,6 +669,73 @@ function saveToCloud(patch) {
   const dailyProverbs = !!familyData?.dailyProverbs;
   const prayers = familyData?.prayers || [];
   const comments = familyData?.comments || {};
+  const notifications = familyData?.notifications || [];
+  const notificationsReadAt = familyData?.notificationsReadAt || {};
+  const myNotificationsReadAt = notificationsReadAt[user.uid] || null;
+
+  // 알림 (묵상/기도 작성 시 가족 멤버에게 표시)
+  const NOTIFICATION_CAP = 50;
+  function makeNotification(type, targetId, preview, extras = {}) {
+    return {
+      id: 'n_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      type,           // 'journal' | 'prayer'
+      targetId,
+      actorUid: user.uid,
+      preview: preview.slice(0, 80),
+      createdAt: new Date().toISOString(),
+      ...extras,
+    };
+  }
+  function appendNotification(notif) {
+    return [notif, ...notifications].slice(0, NOTIFICATION_CAP);
+  }
+  function markNotificationsRead() {
+    saveToCloud({
+      notificationsReadAt: { ...notificationsReadAt, [user.uid]: new Date().toISOString() },
+    });
+  }
+  function handleSelectNotification(n) {
+    if (n.type === 'journal' && n.bookId && n.chapter) {
+      setBookId(n.bookId);
+      setChapter(n.chapter);
+      setView('read');
+    } else if (n.type === 'prayer') {
+      setView('prayer');
+    }
+  }
+
+  // 새 알림이 도착하면 브라우저 알림 표시 (권한 허용 시에만)
+  const lastSeenNotifIdRef = useRef(null);
+  useEffect(() => {
+    if (!familyData) return;
+    const list = notifications;
+    const latestId = list[0]?.id || '';
+    // 최초 마운트 시점에는 기존 알림을 모두 "본 것"으로 처리
+    if (lastSeenNotifIdRef.current === null) {
+      lastSeenNotifIdRef.current = latestId;
+      return;
+    }
+    if (latestId === lastSeenNotifIdRef.current) return;
+    const idx = list.findIndex(n => n.id === lastSeenNotifIdRef.current);
+    const newOnes = idx === -1 ? list : list.slice(0, idx);
+    lastSeenNotifIdRef.current = latestId;
+
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    newOnes.forEach(n => {
+      if (n.actorUid === user.uid) return; // 본인이 만든 알림은 무시
+      const actor = familyData.members?.find(m => m.uid === n.actorUid);
+      const actorName = actor?.displayName || '가족';
+      const title = n.type === 'journal'
+        ? `${actorName}님이 묵상을 남겼어요`
+        : `${actorName}님이 기도제목을 올렸어요`;
+      try {
+        new Notification(title, { body: n.preview, tag: n.id });
+      } catch (e) {
+        // 일부 환경에서 실패할 수 있음 — 무시
+      }
+    });
+  }, [familyData, notifications, user.uid]);
 
   function toggleChapterComplete(bId, ch) {
     const k = `${bId}-${ch}`;
@@ -691,7 +760,15 @@ function saveToCloud(patch) {
       content: content.trim(),
       byUid: user.uid,
     };
-    saveToCloud({ journals: [entry, ...journals] });
+    const notif = makeNotification('journal', entry.id, content.trim(), {
+      bookId: entry.bookId,
+      chapter: entry.chapter,
+      bookName: entry.bookName,
+    });
+    saveToCloud({
+      journals: [entry, ...journals],
+      notifications: appendNotification(notif),
+    });
   }
   
   function updateJournal(id, newContent) {
@@ -761,7 +838,11 @@ function saveToCloud(patch) {
       createdAt: new Date().toISOString(),
       year, month,
     };
-    saveToCloud({ prayers: [entry, ...prayers] });
+    const notif = makeNotification('prayer', entry.id, entry.title);
+    saveToCloud({
+      prayers: [entry, ...prayers],
+      notifications: appendNotification(notif),
+    });
   }
   function updatePrayerStatus(id, status) {
     const newList = prayers.map(p =>
@@ -918,6 +999,14 @@ function saveToCloud(patch) {
             {view === 'read' && (
               <FontSizeButton fontSizeIdx={fontSizeIdx} setFontSizeIdx={setFontSizeIdx} />
             )}
+            <NotificationBell
+              notifications={notifications}
+              members={familyData?.members || []}
+              currentUid={user.uid}
+              lastReadAt={myNotificationsReadAt}
+              onMarkRead={markNotificationsRead}
+              onSelect={handleSelectNotification}
+            />
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
@@ -1115,6 +1204,139 @@ function saveToCloud(patch) {
 // ============================================================
 // 작은 컴포넌트들
 // ============================================================
+function NotificationBell({ notifications, members, currentUid, lastReadAt, onMarkRead, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [permState, setPermState] = useState(() => (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'unsupported');
+
+  const unreadCount = notifications.filter(n =>
+    n.actorUid !== currentUid && (!lastReadAt || n.createdAt > lastReadAt)
+  ).length;
+
+  function handleToggle() {
+    setOpen(prev => {
+      const next = !prev;
+      if (next && unreadCount > 0) onMarkRead();
+      return next;
+    });
+  }
+
+  async function requestBrowserPermission() {
+    if (!('Notification' in window)) return;
+    try {
+      const result = await Notification.requestPermission();
+      setPermState(result);
+    } catch (e) {
+      // 일부 브라우저에서 실패할 수 있음
+    }
+  }
+
+  function getMember(uid) {
+    return members?.find(m => m.uid === uid);
+  }
+  function getColor(uid) {
+    const m = getMember(uid);
+    if (!m) return COLOR_PALETTE[9];
+    return COLOR_PALETTE.find(c => c.id === m.colorId) || COLOR_PALETTE[9];
+  }
+  function getName(uid) {
+    return getMember(uid)?.displayName || '가족';
+  }
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 60_000) return '방금 전';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`;
+    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}일 전`;
+    return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleToggle}
+        className="p-2 hover:bg-stone-100 rounded-lg relative"
+        title="알림"
+      >
+        <Bell size={20} strokeWidth={1.75} />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-xl shadow-lg z-40 w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+              <h3 className="font-semibold text-sm">알림</h3>
+              <span className="text-[11px] text-stone-400">최근 {notifications.length}건</span>
+            </div>
+            {permState === 'default' && (
+              <button
+                onClick={requestBrowserPermission}
+                className="w-full px-4 py-2.5 text-left text-xs text-stone-600 hover:bg-stone-50 border-b border-stone-100 flex items-center gap-2"
+              >
+                <Bell size={13} className="text-amber-500" />
+                <span>브라우저 알림 켜기 (앱이 열려있을 때 즉시 알림)</span>
+              </button>
+            )}
+            {permState === 'denied' && (
+              <div className="px-4 py-2.5 text-[11px] text-stone-400 border-b border-stone-100 flex items-center gap-1.5">
+                <BellOff size={12} /> 브라우저 알림이 차단되어 있어요
+              </div>
+            )}
+            {notifications.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-stone-400">아직 알림이 없어요</div>
+            ) : (
+              <div className="divide-y divide-stone-100">
+                {notifications.map(n => {
+                  const isMe = n.actorUid === currentUid;
+                  const isUnread = !isMe && (!lastReadAt || n.createdAt > lastReadAt);
+                  const c = getColor(n.actorUid);
+                  const name = getName(n.actorUid);
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => { onSelect(n); setOpen(false); }}
+                      className={`w-full text-left px-4 py-3 hover:bg-stone-50 ${isUnread ? 'bg-amber-50/40' : ''}`}
+                    >
+                      <div className="flex gap-2.5 items-start">
+                        <div
+                          className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold border"
+                          style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
+                        >
+                          {(name[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm leading-snug">
+                            <span className="font-semibold">{name}</span>
+                            <span className="text-stone-600">
+                              {n.type === 'journal'
+                                ? `님이 ${n.bookName ? `${n.bookName} ${n.chapter}장 ` : ''}묵상을 남겼어요`
+                                : '님이 기도제목을 올렸어요'}
+                            </span>
+                          </div>
+                          {n.preview && (
+                            <div className="text-xs text-stone-500 mt-0.5 line-clamp-2">{n.preview}</div>
+                          )}
+                          <div className="text-[10px] text-stone-400 mt-1">{timeAgo(n.createdAt)}</div>
+                        </div>
+                        {isUnread && <div className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function FontSizeButton({ fontSizeIdx, setFontSizeIdx }) {
   const [open, setOpen] = useState(false);
   return (
