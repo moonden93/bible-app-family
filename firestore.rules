@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 사용자 → 가족방 매핑: 본인 문서만 읽고 쓸 수 있음
+    match /userFamilies/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // 가족방 데이터
+    // - 인증된(Google 로그인) 사용자만 접근 허용
+    // - 가족방 ID와 초대 코드는 무작위로 생성되어 외부 추측이 어려움
+    // - 멤버십 세부 검증은 클라이언트에서 처리
+    match /families/{familyId} {
+      // 읽기/조회: 인증된 사용자 (초대 코드 query 포함)
+      allow read: if request.auth != null;
+
+      // 생성: 본인이 createdBy로 지정된 경우만
+      allow create: if request.auth != null
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // 수정: 인증된 사용자 (가족 멤버 동작)
+      allow update: if request.auth != null;
+
+      // 삭제: 가족방을 만든 사람만
+      allow delete: if request.auth != null
+                    && resource.data.createdBy == request.auth.uid;
+    }
+
+    // 그 외 모든 경로 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
