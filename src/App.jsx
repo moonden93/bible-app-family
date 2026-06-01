@@ -663,6 +663,7 @@ function saveToCloud(patch) {
   const bookmarks = familyData?.bookmarks || [];
   const completedList = familyData?.completed || [];
   const completedChapters = useMemo(() => new Set(completedList.map(c => c.key)), [completedList]);
+  const verseReadsMap = familyData?.verseReads || {};
   const activePlan = familyData?.activePlan || null;
   const dailyProverbs = !!familyData?.dailyProverbs;
   const prayers = familyData?.prayers || [];
@@ -678,6 +679,20 @@ function saveToCloud(patch) {
       newList = [...completedList, { key: k, byUid: user.uid, completedAt: new Date().toISOString() }];
     }
     saveToCloud({ completed: newList });
+  }
+
+  function toggleVerseRead(bId, ch, verse) {
+    const key = `${bId}-${ch}`;
+    // pending patch가 있으면 그 위에서 계산 (빠른 연속 토글 시 누락 방지)
+    const base = pendingPatchRef.current.verseReads || verseReadsMap;
+    const current = base[key] || [];
+    const next = current.includes(verse)
+      ? current.filter(v => v !== verse)
+      : [...current, verse].sort((a, b) => a - b);
+    const newMap = { ...base };
+    if (next.length === 0) delete newMap[key];
+    else newMap[key] = next;
+    saveToCloud({ verseReads: newMap });
   }
 
   function addJournal(content, jBookId, jChapter) {
@@ -975,6 +990,8 @@ function saveToCloud(patch) {
             isCompleted={completedChapters.has(`${bookId}-${chapter}`)}
             onToggleComplete={() => toggleChapterComplete(bookId, chapter)}
             completedBy={completedList.find(c => c.key === `${bookId}-${chapter}`)?.byUid}
+            verseReads={verseReadsMap[`${bookId}-${chapter}`] || []}
+            onToggleVerseRead={(v) => toggleVerseRead(bookId, chapter, v)}
             onPrevChapter={() => {
               if (chapter > 1) setChapter(chapter - 1);
               else {
@@ -1205,12 +1222,16 @@ function BookList({ bible, currentBookId, currentChapter, onSelect, completedCha
 // ============================================================
 // 본문 읽기 뷰
 // ============================================================
-function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete, completedBy, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
+function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete, completedBy, verseReads, onToggleVerseRead, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
   const verses = chapterData.v;
   const headings = chapterData.h || {};
   const [journalDraft, setJournalDraft] = useState('');
   const [showJournalForm, setShowJournalForm] = useState(false);
   const completedByInfo = completedBy && completedBy !== currentUid ? getUserInfo(completedBy) : null;
+  const verseReadSet = useMemo(() => new Set(verseReads), [verseReads]);
+  const readCount = verseReadSet.size;
+  const totalVerses = verses.length;
+  const readPct = totalVerses > 0 ? Math.round((readCount / totalVerses) * 100) : 0;
 
   return (
     <div>
@@ -1231,6 +1252,20 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete
             ))}
           </div>
         )}
+      </div>
+
+      {/* 절별 읽기 진행률 게이지 */}
+      <div className="mb-3 bg-white border border-stone-200 rounded-xl px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-stone-500">절별 읽기 진행률</span>
+          <span className="text-xs font-bold text-stone-700">{readCount} / {totalVerses}절 <span className="text-stone-400 font-medium">({readPct}%)</span></span>
+        </div>
+        <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+            style={{ width: `${readPct}%` }}
+          />
+        </div>
       </div>
 
       <button
@@ -1258,12 +1293,23 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete
             const verseNum = i + 1;
             const heading = headings[String(verseNum)];
             const bookmarked = isBookmarked(book.id, chapterNum, verseNum);
+            const isRead = verseReadSet.has(verseNum);
             return (
               <div key={verseNum}>
                 {heading && (<h3 className="text-base font-bold text-stone-700 mb-3 mt-2 pb-2 border-b border-stone-200 tracking-tight">{heading}</h3>)}
                 <div className="flex gap-3 group">
-                  <span className="text-xs font-bold text-stone-400 mt-1.5 w-6 text-right shrink-0">{verseNum}</span>
-                  <p className={`text-stone-800 leading-loose flex-1 ${fontSizeClass}`} style={{ wordBreak: 'keep-all' }}>{text}</p>
+                  <button
+                    onClick={() => onToggleVerseRead(verseNum)}
+                    aria-label={isRead ? `${verseNum}절 읽음 해제` : `${verseNum}절 읽음으로 표시`}
+                    className={`mt-0.5 w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                      isRead
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                        : 'bg-stone-100 text-stone-400 hover:bg-stone-200 hover:text-stone-600'
+                    }`}
+                  >
+                    {isRead ? <Check size={14} strokeWidth={3} /> : verseNum}
+                  </button>
+                  <p className={`text-stone-800 leading-loose flex-1 ${fontSizeClass} ${isRead ? 'text-stone-500' : ''}`} style={{ wordBreak: 'keep-all' }}>{text}</p>
                   <div className="flex flex-col gap-0.5 shrink-0 -mt-0.5">
                     <button onClick={() => onToggleBookmark(verseNum)} className={`p-1.5 rounded-lg ${bookmarked ? 'text-amber-500' : 'text-stone-300 hover:text-stone-600'}`}>
                       <Star size={16} strokeWidth={2} fill={bookmarked ? 'currentColor' : 'none'} />
