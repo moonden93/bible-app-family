@@ -531,10 +531,42 @@ function BibleApp({ user, familyId, onLeaveFamily }) {
 
   const fileInputRef = useRef(null);
   const toastTimerRef = useRef(null);
-  const pendingPatchRef = useRef({}); 
+  const pendingPatchRef = useRef({});
   const syncTimerRef = useRef(null);
+  const isPopstateRef = useRef(false);
+  const historyInitedRef = useRef(false);
 
   const familyDocRef = useMemo(() => doc(db, 'families', familyId), [familyId]);
+
+  // 브라우저 뒤로가기 지원: popstate에서 view/book/chapter 복원
+  useEffect(() => {
+    const handler = (e) => {
+      const s = e.state;
+      if (s && s.view !== undefined) {
+        isPopstateRef.current = true;
+        setView(s.view);
+        if (s.bookId !== undefined) setBookId(s.bookId);
+        if (s.chapter !== undefined) setChapter(s.chapter);
+      }
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  // 사용자 액션으로 view/book/chapter가 바뀌면 history에 push
+  useEffect(() => {
+    if (bibleLoading || dataLoading) return;
+    if (!historyInitedRef.current) {
+      historyInitedRef.current = true;
+      window.history.replaceState({ view, bookId, chapter }, '');
+      return;
+    }
+    if (isPopstateRef.current) {
+      isPopstateRef.current = false;
+      return;
+    }
+    window.history.pushState({ view, bookId, chapter }, '');
+  }, [view, bookId, chapter, bibleLoading, dataLoading]);
 
   // 가족 데이터 실시간 구독
   useEffect(() => {
