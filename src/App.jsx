@@ -820,16 +820,20 @@ function saveToCloud(patch) {
   }, [bible, searchQuery]);
 
   const stats = useMemo(() => {
-    if (!bible) return { totalChapters: 0, completedCount: 0, journalCount: 0, prayerCount: 0, answeredCount: 0 };
+    if (!bible) return { totalChapters: 0, completedCount: 0, journalCount: 0, prayerCount: 0, answeredCount: 0, totalVerses: 0, readVerses: 0 };
     const totalChapters = bible.books.reduce((s, b) => s + b.c.length, 0);
+    const totalVerses = bible.books.reduce((s, b) => s + b.c.reduce((cs, ch) => cs + ch.v.length, 0), 0);
+    const readVerses = Object.values(verseReadsMap).reduce((s, arr) => s + (arr?.length || 0), 0);
     return {
       totalChapters,
       completedCount: completedChapters.size,
       journalCount: journals.length,
       prayerCount: prayers.length,
       answeredCount: prayers.filter(p => p.status === 'answered').length,
+      totalVerses,
+      readVerses,
     };
-  }, [bible, completedChapters, journals, prayers]);
+  }, [bible, completedChapters, journals, prayers, verseReadsMap]);
 
   const planInfo = useMemo(() => {
     if (!activePlan || !bible) return null;
@@ -992,12 +996,15 @@ function saveToCloud(patch) {
             completedBy={completedList.find(c => c.key === `${bookId}-${chapter}`)?.byUid}
             verseReads={verseReadsMap[`${bookId}-${chapter}`] || []}
             onToggleVerseRead={(v) => toggleVerseRead(bookId, chapter, v)}
+            totalVerses={stats.totalVerses}
+            totalReadVerses={stats.readVerses}
             onPrevChapter={() => {
               if (chapter > 1) setChapter(chapter - 1);
               else {
                 const idx = BOOK_ORDER.indexOf(bookId);
                 if (idx > 0) { setBookId(BOOK_ORDER[idx - 1]); setChapter(bookMap[BOOK_ORDER[idx - 1]].c.length); }
               }
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onNextChapter={() => {
               if (chapter < currentBook.c.length) setChapter(chapter + 1);
@@ -1005,6 +1012,7 @@ function saveToCloud(patch) {
                 const idx = BOOK_ORDER.indexOf(bookId);
                 if (idx < BOOK_ORDER.length - 1) { setBookId(BOOK_ORDER[idx + 1]); setChapter(1); }
               }
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -1222,7 +1230,7 @@ function BookList({ bible, currentBookId, currentChapter, onSelect, completedCha
 // ============================================================
 // 본문 읽기 뷰
 // ============================================================
-function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete, completedBy, verseReads, onToggleVerseRead, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
+function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete, completedBy, verseReads, onToggleVerseRead, totalVerses, totalReadVerses, onPrevChapter, onNextChapter, searchQuery, setSearchQuery, searchResults, onSelectSearchResult, isBookmarked, onToggleBookmark, onShare, fontSizeClass, chapterJournals, onAddJournal, onUpdateJournal, getUserColor, getUserInfo, currentUid, comments, addComment, deleteComment, onDeleteJournal }) {
   const verses = chapterData.v;
   const headings = chapterData.h || {};
   const [journalDraft, setJournalDraft] = useState('');
@@ -1230,8 +1238,10 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete
   const completedByInfo = completedBy && completedBy !== currentUid ? getUserInfo(completedBy) : null;
   const verseReadSet = useMemo(() => new Set(verseReads), [verseReads]);
   const readCount = verseReadSet.size;
-  const totalVerses = verses.length;
-  const readPct = totalVerses > 0 ? Math.round((readCount / totalVerses) * 100) : 0;
+  const chapterTotalVerses = verses.length;
+  const readPct = chapterTotalVerses > 0 ? Math.round((readCount / chapterTotalVerses) * 100) : 0;
+  const totalPctRaw = totalVerses > 0 ? (totalReadVerses / totalVerses) * 100 : 0;
+  const totalPctDisplay = totalPctRaw > 0 && totalPctRaw < 1 ? totalPctRaw.toFixed(1) : Math.round(totalPctRaw);
 
   return (
     <div>
@@ -1254,17 +1264,31 @@ function ReadView({ book, chapterNum, chapterData, isCompleted, onToggleComplete
         )}
       </div>
 
-      {/* 절별 읽기 진행률 게이지 */}
-      <div className="mb-3 bg-white border border-stone-200 rounded-xl px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-stone-500">절별 읽기 진행률</span>
-          <span className="text-xs font-bold text-stone-700">{readCount} / {totalVerses}절 <span className="text-stone-400 font-medium">({readPct}%)</span></span>
+      {/* 읽기 진행률 게이지 (이번 장 / 성경 전체) */}
+      <div className="mb-3 bg-white border border-stone-200 rounded-xl px-4 py-3 space-y-3">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-stone-500">이번 장 진행률</span>
+            <span className="text-xs font-bold text-stone-700">{readCount} / {chapterTotalVerses}절 <span className="text-stone-400 font-medium">({readPct}%)</span></span>
+          </div>
+          <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+              style={{ width: `${readPct}%` }}
+            />
+          </div>
         </div>
-        <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-            style={{ width: `${readPct}%` }}
-          />
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-stone-500">성경 전체 진행률</span>
+            <span className="text-xs font-bold text-stone-700">{totalReadVerses.toLocaleString()} / {totalVerses.toLocaleString()}절 <span className="text-stone-400 font-medium">({totalPctDisplay}%)</span></span>
+          </div>
+          <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+              style={{ width: `${totalPctRaw}%` }}
+            />
+          </div>
         </div>
       </div>
 
