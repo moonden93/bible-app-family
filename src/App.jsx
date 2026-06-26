@@ -1622,13 +1622,25 @@ function DailyProverbsCard({ todayProverbsCh, completedChapters, onSelect, onTog
 }
 
 function ActivePlanView({ activePlan, planInfo, bookMap, completedChapters, onSelectChapter, onCancelPlan, stats, proverbsCard }) {
-  const { schedule, dayIndex, totalDays } = planInfo;
-  const progress = Math.max(0, Math.min(dayIndex + 1, totalDays));
+  const { schedule, totalDays } = planInfo;
+  // 진행 기준: 첫 번째 미완료 day = 지금 읽어야 할 일자
+  // 모두 완료된 경우 totalDays
+  const currentDayIdx = useMemo(() => {
+    for (let d = 0; d < totalDays; d++) {
+      const dc = schedule[d] || [];
+      const allDone = dc.length > 0 && dc.every(c => completedChapters.has(`${c.bookId}-${c.chapter}`));
+      if (!allDone) return d;
+    }
+    return totalDays;
+  }, [schedule, totalDays, completedChapters]);
+  const allCompleted = currentDayIdx >= totalDays;
+  const progress = Math.min(currentDayIdx, totalDays);
   const totalChaptersInPlan = schedule.reduce((s, d) => s + d.length, 0);
   const completedInPlan = schedule.flat().filter(c => completedChapters.has(`${c.bookId}-${c.chapter}`)).length;
   const endDate = addDays(activePlan.startDate, totalDays - 1);
+  // 지금 읽을 일자부터 위주로 보여줌 (이전에 완료된 일정은 생략)
   const showDays = [];
-  for (let d = Math.max(0, dayIndex - 2); d < Math.min(totalDays, dayIndex + 7); d++) showDays.push(d);
+  for (let d = currentDayIdx; d < Math.min(totalDays, currentDayIdx + 9); d++) showDays.push(d);
   return (
     <div>
       <PlanStatsBar stats={stats} />
@@ -1642,50 +1654,57 @@ function ActivePlanView({ activePlan, planInfo, bookMap, completedChapters, onSe
           <button onClick={onCancelPlan} className="text-xs text-stone-400 hover:text-red-500 px-2 py-1 rounded-md">계획 취소</button>
         </div>
         <div className="flex items-end justify-between mb-2">
-          <div><div className="text-xs text-stone-500">날짜 진행</div><div className="text-2xl font-bold">{progress} <span className="text-sm font-normal text-stone-400">/ {totalDays}일</span></div></div>
+          <div><div className="text-xs text-stone-500">완료한 일정</div><div className="text-2xl font-bold">{progress} <span className="text-sm font-normal text-stone-400">/ {totalDays}일</span></div></div>
           <div className="text-right"><div className="text-xs text-stone-500">읽기 완료</div><div className="text-2xl font-bold">{completedInPlan} <span className="text-sm font-normal text-stone-400">/ {totalChaptersInPlan}장</span></div></div>
         </div>
         <div className="h-2 bg-stone-100 rounded-full overflow-hidden mb-3"><div className="h-full bg-stone-900 transition-all" style={{ width: `${(progress / totalDays) * 100}%` }} /></div>
         <div className="flex justify-between text-xs text-stone-400"><span>시작: {activePlan.startDate}</span><span>종료 예정: {endDate}</span></div>
       </div>
       <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3 px-1">독서 일정</h3>
-      <div className="space-y-3">
-        {showDays.map(d => {
-          const dayChapters = schedule[d] || [];
-          const date = addDays(activePlan.startDate, d);
-          const dateObj = new Date(date + 'T00:00:00');
-          const isToday = d === dayIndex;
-          const isPast = d < dayIndex;
-          const allDone = dayChapters.length > 0 && dayChapters.every(c => completedChapters.has(`${c.bookId}-${c.chapter}`));
-          return (
-            <div key={d} className={`bg-white border rounded-2xl p-4 ${isToday ? 'border-stone-900 ring-2 ring-stone-900/10' : 'border-stone-200'}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isToday ? 'bg-stone-900 text-white' : isPast ? 'bg-stone-100 text-stone-500' : 'bg-amber-50 text-amber-700'}`}>
-                    {isToday ? '오늘' : isPast ? '지남' : `D+${d - dayIndex}`}
-                  </span>
-                  <span className="text-sm font-semibold">Day {d + 1}</span>
-                  <span className="text-xs text-stone-400">{dateObj.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}</span>
+      {allCompleted ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
+          <div className="text-2xl mb-2">🎉</div>
+          <div className="text-lg font-bold text-emerald-700 mb-1">계획 완료!</div>
+          <div className="text-sm text-emerald-600">모든 일정을 다 읽으셨습니다.</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {showDays.map(d => {
+            const dayChapters = schedule[d] || [];
+            const date = addDays(activePlan.startDate, d);
+            const dateObj = new Date(date + 'T00:00:00');
+            const isCurrent = d === currentDayIdx;
+            const allDone = dayChapters.length > 0 && dayChapters.every(c => completedChapters.has(`${c.bookId}-${c.chapter}`));
+            return (
+              <div key={d} className={`bg-white border rounded-2xl p-4 ${isCurrent ? 'border-stone-900 ring-2 ring-stone-900/10' : 'border-stone-200'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isCurrent ? 'bg-stone-900 text-white' : 'bg-amber-50 text-amber-700'}`}>
+                      {isCurrent ? '지금 읽기' : `D+${d - currentDayIdx}`}
+                    </span>
+                    <span className="text-sm font-semibold">Day {d + 1}</span>
+                    <span className="text-xs text-stone-400">{dateObj.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}</span>
+                  </div>
+                  {allDone && <span className="text-emerald-600 text-xs font-bold flex items-center gap-1"><Check size={14} strokeWidth={2.5} /> 완료</span>}
                 </div>
-                {allDone && <span className="text-emerald-600 text-xs font-bold flex items-center gap-1"><Check size={14} strokeWidth={2.5} /> 완료</span>}
+                <div className="flex flex-wrap gap-2">
+                  {dayChapters.map((c, i) => {
+                    const book = bookMap[c.bookId];
+                    if (!book) return null;
+                    const done = completedChapters.has(`${c.bookId}-${c.chapter}`);
+                    return (
+                      <button key={i} onClick={() => onSelectChapter(c.bookId, c.chapter)} className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${done ? 'bg-emerald-500 text-white' : 'bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200'}`}>
+                        {!done && <BookOpen size={12} strokeWidth={2} />}
+                        {book.n} {c.chapter}장
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {dayChapters.map((c, i) => {
-                  const book = bookMap[c.bookId];
-                  if (!book) return null;
-                  const done = completedChapters.has(`${c.bookId}-${c.chapter}`);
-                  return (
-                    <button key={i} onClick={() => onSelectChapter(c.bookId, c.chapter)} className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${done ? 'bg-emerald-500 text-white' : 'bg-stone-50 text-stone-700 hover:bg-stone-100 border border-stone-200'}`}>
-                      {!done && <BookOpen size={12} strokeWidth={2} />}
-                      {book.n} {c.chapter}장
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
