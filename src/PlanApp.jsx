@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, db, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInAnonymously, updateProfile, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
   arrayUnion, serverTimestamp
@@ -174,8 +174,25 @@ function Loading({ text }) {
 function SignInScreen() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(() => {
+    try { return localStorage.getItem('plan-name') || ''; } catch { return ''; }
+  });
 
-  async function handleSignIn() {
+  async function handleAnonymousStart() {
+    if (!name.trim()) { setErr('이름을 입력해주세요.'); return; }
+    setErr('');
+    setLoading(true);
+    try {
+      const cred = await signInAnonymously(auth);
+      await updateProfile(cred.user, { displayName: name.trim() });
+      try { localStorage.setItem('plan-name', name.trim()); } catch {}
+    } catch (e) {
+      setErr(e.message || String(e));
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
     setErr('');
     setLoading(true);
     try {
@@ -185,28 +202,53 @@ function SignInScreen() {
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         // 사용자가 창 닫음 → 조용히 종료
       } else if (code === 'auth/popup-blocked') {
-        setErr('브라우저가 팝업을 차단했어요. 팝업을 허용한 뒤 다시 시도해주세요.');
+        setErr('브라우저가 팝업을 차단했어요. 팝업을 허용하거나 위쪽 "이름으로 시작"을 사용해주세요.');
       } else {
-        setErr(e.message || String(e));
+        setErr('Google 로그인 실패. 위쪽 "이름으로 시작"을 사용해주세요.\n(' + (e.message || e) + ')');
       }
     } finally {
       setLoading(false);
     }
   }
+
   return (
     <div className="min-h-screen w-full bg-stone-50 flex items-center justify-center p-6" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
       <div className="max-w-sm w-full">
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="text-5xl mb-3">📖</div>
           <h1 className="text-2xl font-bold tracking-tight mb-1">함께 통독</h1>
           <p className="text-sm text-stone-500">친구와 성경을 매일 조금씩</p>
         </div>
-        <button onClick={handleSignIn} disabled={loading} className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-40">
-          {loading ? '로그인 중...' : 'Google 계정으로 시작'}
+
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-3">
+          <label className="block text-xs font-medium text-stone-500 mb-1.5">내 이름 (친구에게 보임)</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value.slice(0, 20))}
+            placeholder="예: 문지현"
+            className="w-full px-3 py-3 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-stone-400 mb-3"
+            maxLength={20}
+          />
+          <button onClick={handleAnonymousStart} disabled={loading || !name.trim()} className="w-full bg-stone-900 text-white py-3 rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40">
+            {loading ? '시작하는 중...' : '이 이름으로 시작'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-stone-200" />
+          <span className="text-[10px] text-stone-400 uppercase tracking-widest">또는</span>
+          <div className="flex-1 h-px bg-stone-200" />
+        </div>
+
+        <button onClick={handleGoogleSignIn} disabled={loading} className="w-full bg-white border border-stone-300 text-stone-700 py-3 rounded-xl font-medium hover:bg-stone-50 disabled:opacity-40 text-sm">
+          Google 계정으로 시작
         </button>
-        {err && <p className="mt-4 text-sm text-red-600 text-center">{err}</p>}
-        <p className="mt-8 text-xs text-stone-400 text-center leading-relaxed">
-          로그인하면 방을 만들거나 친구가 만든 방에<br />코드로 참가할 수 있어요.
+
+        {err && <p className="mt-4 text-sm text-red-600 text-center whitespace-pre-line">{err}</p>}
+
+        <p className="mt-6 text-xs text-stone-400 text-center leading-relaxed">
+          이름으로 시작하면 이 기기에 진도가 저장됩니다.<br />
+          Google 로그인은 여러 기기에서 같은 진도를 볼 수 있어요.
         </p>
       </div>
     </div>
