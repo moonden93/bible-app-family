@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, db, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
   arrayUnion, serverTimestamp
@@ -157,10 +157,47 @@ function Loading({ text }) {
 // ============================================================
 function SignInScreen() {
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Redirect 로그인 결과 처리 (mobile fallback)
+  useEffect(() => {
+    getRedirectResult(auth).catch(e => {
+      // "missing initial state" 등은 첫 로드에선 무시
+      if (e?.code && e.code !== 'auth/no-auth-event') {
+        console.warn('Redirect result error:', e.message);
+      }
+    });
+  }, []);
+
   async function handleSignIn() {
     setErr('');
-    try { await signInWithPopup(auth, googleProvider); }
-    catch (e) { setErr(e.message); }
+    setLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (e) {
+      const code = e?.code || '';
+      // Popup 차단 / 미지원 / 스토리지 파티션 등 → redirect로 fallback
+      const fallbackCodes = [
+        'auth/popup-blocked',
+        'auth/popup-closed-by-user',
+        'auth/cancelled-popup-request',
+        'auth/operation-not-supported-in-this-environment',
+        'auth/web-storage-unsupported',
+        'auth/internal-error',
+      ];
+      if (fallbackCodes.includes(code) || /storage|sessionStorage|initial state/i.test(e?.message || '')) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (e2) {
+          setErr(e2.message || String(e2));
+        }
+      } else {
+        setErr(e.message || String(e));
+      }
+    } finally {
+      setLoading(false);
+    }
   }
   return (
     <div className="min-h-screen w-full bg-stone-50 flex items-center justify-center p-6" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
@@ -170,8 +207,8 @@ function SignInScreen() {
           <h1 className="text-2xl font-bold tracking-tight mb-1">함께 통독</h1>
           <p className="text-sm text-stone-500">친구와 성경을 매일 조금씩</p>
         </div>
-        <button onClick={handleSignIn} className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-medium hover:bg-stone-800 transition-colors">
-          Google 계정으로 시작
+        <button onClick={handleSignIn} disabled={loading} className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-medium hover:bg-stone-800 transition-colors disabled:opacity-40">
+          {loading ? '로그인 중...' : 'Google 계정으로 시작'}
         </button>
         {err && <p className="mt-4 text-sm text-red-600 text-center">{err}</p>}
         <p className="mt-8 text-xs text-stone-400 text-center leading-relaxed">
