@@ -488,20 +488,51 @@ function RoomView({ user, roomCode, onExit }) {
   const [loading, setLoading] = useState(true);
   const [showMembers, setShowMembers] = useState(false);
   const [copyOk, setCopyOk] = useState(false);
-  const pendingReadsRef = useRef(null);
+  // 낙관적 로컬 상태: 클릭 즉시 반영, 배경에서 Firestore 저장
+  const [myReadsLocal, setMyReadsLocal] = useState(null); // null = 서버 데이터 사용
+  const myReadsRef = useRef(null); // 최신 값 (setTimeout 콜백에서 사용)
   const saveTimerRef = useRef(null);
+  const initedRef = useRef(false);
 
   const roomRef = useMemo(() => doc(db, 'readingRooms', roomCode), [roomCode]);
 
+  // 언마운트/방 이탈 시 남은 pending 저장을 즉시 flush
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        if (myReadsRef.current) {
+          const arr = [...myReadsRef.current].sort((a, b) => a - b);
+          updateDoc(roomRef, { [`reads.${user.uid}`]: arr }).catch(() => {});
+        }
+      }
+    };
+  }, [roomRef, user.uid]);
+
   useEffect(() => {
     setLoading(true);
+    initedRef.current = false;
+    myReadsRef.current = null;
+    setMyReadsLocal(null);
     const unsub = onSnapshot(roomRef, (snap) => {
-      if (snap.exists()) setRoom({ id: snap.id, ...snap.data() });
-      else setRoom(null);
+      if (snap.exists()) {
+        const data = { id: snap.id, ...snap.data() };
+        setRoom(data);
+        // 첫 로드 시에만 서버 값으로 로컬 초기화
+        if (!initedRef.current) {
+          const initial = new Set(data.reads?.[user.uid] || []);
+          myReadsRef.current = initial;
+          setMyReadsLocal(initial);
+          initedRef.current = true;
+        }
+      } else {
+        setRoom(null);
+      }
       setLoading(false);
     }, () => setLoading(false));
     return () => unsub();
-  }, [roomRef]);
+  }, [roomRef, user.uid]);
 
   if (loading) return <Loading text="방 불러오는 중..." />;
   if (!room) return (
@@ -515,16 +546,14 @@ function RoomView({ user, roomCode, onExit }) {
   const perDay = config.chaptersPerDay;
   const startYMD = config.startDate;
   const days = totalDays(perDay);
-  const myReads = new Set((pendingReadsRef.current ?? room.reads?.[user.uid]) || []);
+  const myReads = myReadsLocal || new Set(room.reads?.[user.uid] || []);
   const membersReads = room.reads || {};
   const members = room.members || [];
   const myMember = members.find(m => m.uid === user.uid);
   const myColor = colorOf(myMember?.colorId);
 
-  // 진행률
   const myPct = (myReads.size / TOTAL_CHAPTERS) * 100;
 
-  // 지금 읽을 Day (내 진도 기준)
   function currentDayIdx() {
     for (let d = 0; d < days; d++) {
       const start = d * perDay;
@@ -537,25 +566,20 @@ function RoomView({ user, roomCode, onExit }) {
   }
   const curD = currentDayIdx();
 
-  async function toggleChapter(idx) {
-    const next = new Set(pendingReadsRef.current ?? room.reads?.[user.uid] ?? []);
+  function toggleChapter(idx) {
+    const base = myReadsRef.current || new Set(room.reads?.[user.uid] || []);
+    const next = new Set(base);
     if (next.has(idx)) next.delete(idx);
     else next.add(idx);
-    pendingReadsRef.current = [...next].sort((a, b) => a - b);
-    setRoom(r => ({ ...r, reads: { ...r.reads, [user.uid]: pendingReadsRef.current } }));
-
+    myReadsRef.current = next;
+    setMyReadsLocal(next);
+    // 디바운스 저장 (최신 값 기준)
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await updateDoc(roomRef, {
-          [`reads.${user.uid}`]: pendingReadsRef.current,
-        });
-        pendingReadsRef.current = null;
-      } catch (e) {
-        console.error('저장 실패:', e);
-        alert('저장 실패: ' + e.message);
-      }
-    }, 300);
+    saveTimerRef.current = setTimeout(() => {
+      const arr = [...(myReadsRef.current || [])].sort((a, b) => a - b);
+      updateDoc(roomRef, { [`reads.${user.uid}`]: arr })
+        .catch(e => { console.error('저장 실패:', e); alert('저장 실패: ' + e.message); });
+    }, 400);
   }
 
   async function handleLeaveRoom() {
