@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, db, googleProvider } from './firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
   arrayUnion, serverTimestamp
@@ -159,16 +159,6 @@ function SignInScreen() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Redirect 로그인 결과 처리 (mobile fallback)
-  useEffect(() => {
-    getRedirectResult(auth).catch(e => {
-      // "missing initial state" 등은 첫 로드에선 무시
-      if (e?.code && e.code !== 'auth/no-auth-event') {
-        console.warn('Redirect result error:', e.message);
-      }
-    });
-  }, []);
-
   async function handleSignIn() {
     setErr('');
     setLoading(true);
@@ -176,22 +166,10 @@ function SignInScreen() {
       await signInWithPopup(auth, googleProvider);
     } catch (e) {
       const code = e?.code || '';
-      // Popup 차단 / 미지원 / 스토리지 파티션 등 → redirect로 fallback
-      const fallbackCodes = [
-        'auth/popup-blocked',
-        'auth/popup-closed-by-user',
-        'auth/cancelled-popup-request',
-        'auth/operation-not-supported-in-this-environment',
-        'auth/web-storage-unsupported',
-        'auth/internal-error',
-      ];
-      if (fallbackCodes.includes(code) || /storage|sessionStorage|initial state/i.test(e?.message || '')) {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        } catch (e2) {
-          setErr(e2.message || String(e2));
-        }
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // 사용자가 창 닫음 → 조용히 종료
+      } else if (code === 'auth/popup-blocked') {
+        setErr('브라우저가 팝업을 차단했어요. 팝업을 허용한 뒤 다시 시도해주세요.');
       } else {
         setErr(e.message || String(e));
       }
