@@ -98,6 +98,21 @@ function colorOf(colorId) {
   return COLORS.find(c => c.id === colorId) || COLORS[9];
 }
 
+// 브라우저에 남아있는 이전 Firebase Auth redirect 잔재 정리 (missing initial state 회피)
+function clearStaleAuthState() {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
+    const keys = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (k && (k.includes('firebase:pendingRedirect') || k.includes('firebase:redirectEvent') || k.includes('authEvent'))) {
+        keys.push(k);
+      }
+    }
+    keys.forEach(k => window.sessionStorage.removeItem(k));
+  } catch (e) {}
+}
+
 // ============================================================
 // 최상위 컴포넌트
 // ============================================================
@@ -109,6 +124,7 @@ export default function PlanApp() {
   const [currentRoom, setCurrentRoom] = useState(null); // roomCode
 
   useEffect(() => {
+    clearStaleAuthState();
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthLoading(false);
@@ -509,8 +525,6 @@ function RoomView({ user, roomCode, onExit }) {
   const saveTimerRef = useRef(null);
   const initedRef = useRef(false);
 
-  const roomRef = useMemo(() => doc(db, 'readingRooms', roomCode), [roomCode]);
-
   // 언마운트/방 이탈 시 남은 pending 저장을 즉시 flush
   useEffect(() => {
     return () => {
@@ -519,18 +533,18 @@ function RoomView({ user, roomCode, onExit }) {
         saveTimerRef.current = null;
         if (myReadsRef.current) {
           const arr = [...myReadsRef.current].sort((a, b) => a - b);
-          updateDoc(roomRef, { [`reads.${user.uid}`]: arr }).catch(() => {});
+          updateDoc(doc(db, 'readingRooms', roomCode), { [`reads.${user.uid}`]: arr }).catch(() => {});
         }
       }
     };
-  }, [roomRef, user.uid]);
+  }, [roomCode, user.uid]);
 
   useEffect(() => {
     setLoading(true);
     initedRef.current = false;
     myReadsRef.current = null;
     setMyReadsLocal(null);
-    const unsub = onSnapshot(roomRef, (snap) => {
+    const unsub = onSnapshot(doc(db, 'readingRooms', roomCode), (snap) => {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() };
         setRoom(data);
@@ -547,7 +561,7 @@ function RoomView({ user, roomCode, onExit }) {
       setLoading(false);
     }, () => setLoading(false));
     return () => unsub();
-  }, [roomRef, user.uid]);
+  }, [roomCode, user.uid]);
 
   if (loading) return <Loading text="방 불러오는 중..." />;
   if (!room) return (
@@ -581,6 +595,15 @@ function RoomView({ user, roomCode, onExit }) {
   }
   const curD = currentDayIdx();
 
+  function scheduleSave() {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const arr = [...(myReadsRef.current || [])].sort((a, b) => a - b);
+      updateDoc(doc(db, 'readingRooms', roomCode), { [`reads.${user.uid}`]: arr })
+        .catch(e => { console.error('저장 실패:', e); alert('저장 실패: ' + e.message); });
+    }, 400);
+  }
+
   function toggleChapter(idx) {
     const base = myReadsRef.current || new Set(room.reads?.[user.uid] || []);
     const next = new Set(base);
@@ -588,13 +611,25 @@ function RoomView({ user, roomCode, onExit }) {
     else next.add(idx);
     myReadsRef.current = next;
     setMyReadsLocal(next);
-    // 디바운스 저장 (최신 값 기준)
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const arr = [...(myReadsRef.current || [])].sort((a, b) => a - b);
-      updateDoc(roomRef, { [`reads.${user.uid}`]: arr })
-        .catch(e => { console.error('저장 실패:', e); alert('저장 실패: ' + e.message); });
-    }, 400);
+    scheduleSave();
+  }
+
+  // 하루 전체 토글: 이미 다 읽었으면 모두 해제, 그 외에는 모두 완료
+  function toggleDay(dayIdx) {
+    const start = dayIdx * perDay;
+    const end = Math.min(start + perDay, TOTAL_CHAPTERS);
+    const base = myReadsRef.current || new Set(room.reads?.[user.uid] || []);
+    let allDone = true;
+    for (let i = start; i < end; i++) if (!base.has(i)) { allDone = false; break; }
+    const next = new Set(base);
+    if (allDone) {
+      for (let i = start; i < end; i++) next.delete(i);
+    } else {
+      for (let i = start; i < end; i++) next.add(i);
+    }
+    myReadsRef.current = next;
+    setMyReadsLocal(next);
+    scheduleSave();
   }
 
   async function handleLeaveRoom() {
@@ -702,6 +737,7 @@ function RoomView({ user, roomCode, onExit }) {
               members={members}
               currentUid={user.uid}
               onToggle={toggleChapter}
+              onToggleDay={toggleDay}
               isCurrent={true}
             />
           )}
@@ -723,6 +759,7 @@ function RoomView({ user, roomCode, onExit }) {
                 members={members}
                 currentUid={user.uid}
                 onToggle={toggleChapter}
+                onToggleDay={toggleDay}
                 isCurrent={d === curD}
               />
             ))}
@@ -778,7 +815,7 @@ function RoomView({ user, roomCode, onExit }) {
 // ============================================================
 // Day 카드
 // ============================================================
-function DayCard({ dayIdx, perDay, startYMD, myReads, membersReads, members, currentUid, onToggle, isCurrent }) {
+function DayCard({ dayIdx, perDay, startYMD, myReads, membersReads, members, currentUid, onToggle, onToggleDay, isCurrent }) {
   const blocks = dayBlocks(dayIdx, perDay);
   const start = dayIdx * perDay;
   const end = Math.min(start + perDay, TOTAL_CHAPTERS);
@@ -847,6 +884,15 @@ function DayCard({ dayIdx, perDay, startYMD, myReads, membersReads, members, cur
           </div>
         ))}
       </div>
+      {onToggleDay && (
+        <button
+          onClick={() => onToggleDay(dayIdx)}
+          className={`mt-3 w-full py-2 rounded-lg text-xs font-bold border transition-all ${allDone ? 'bg-white text-stone-500 border-stone-200 hover:border-stone-400' : 'text-white border-transparent hover:opacity-90'}`}
+          style={allDone ? undefined : { backgroundColor: myColor.border }}
+        >
+          {allDone ? '전체 해제' : `Day ${dayIdx + 1} 전체 완료 (${totalInDay}장)`}
+        </button>
+      )}
     </article>
   );
 }
