@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, db, googleProvider } from './firebase';
-import { signInWithPopup, signInAnonymously, updateProfile, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInAnonymously, updateProfile, linkWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
   arrayUnion, serverTimestamp
@@ -283,6 +283,7 @@ function RoomListScreen({ user, roomCodes, loading, onOpen }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
   const [rooms, setRooms] = useState({}); // { code: roomData }
   const [roomsFetching, setRoomsFetching] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     if (roomCodes.length === 0) { setRooms({}); return; }
@@ -300,21 +301,55 @@ function RoomListScreen({ user, roomCodes, loading, onOpen }) {
     try { await signOut(auth); } catch (e) { console.error(e); }
   }
 
+  async function handleLinkGoogle() {
+    if (!auth.currentUser) return;
+    setLinking(true);
+    try {
+      await linkWithPopup(auth.currentUser, googleProvider);
+      alert('Google 계정과 연결됐어요.\n지금 진도가 그대로 유지됩니다.');
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // 조용히 종료
+      } else if (code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use') {
+        alert('이 Google 계정은 이미 다른 계정에 연결되어 있어요.\n다른 Google 계정을 사용해주세요.');
+      } else {
+        alert('연결 실패: ' + (e.message || String(e)));
+      }
+    } finally {
+      setLinking(false);
+    }
+  }
+
   if (mode === 'create') return <CreateRoomScreen user={user} onCancel={() => setMode(null)} onCreated={(code) => { setMode(null); onOpen(code); }} />;
   if (mode === 'join') return <JoinRoomScreen user={user} onCancel={() => setMode(null)} onJoined={(code) => { setMode(null); onOpen(code); }} />;
 
   return (
     <div className="min-h-screen w-full bg-stone-50 p-6" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
       <div className="max-w-md mx-auto">
-        <div className="flex items-center justify-between mb-8 pt-2">
+        <div className="flex items-center justify-between mb-6 pt-2">
           <div>
             <h1 className="text-xl font-bold tracking-tight">내 통독방</h1>
-            <p className="text-xs text-stone-500 mt-0.5">{user.displayName || user.email}</p>
+            <p className="text-xs text-stone-500 mt-0.5">{user.displayName || user.email || '익명 사용자'}</p>
           </div>
           <button onClick={handleLogout} className="p-2 text-stone-400 hover:text-stone-900 rounded-lg" title="로그아웃">
             <LogOut size={18} strokeWidth={1.75} />
           </button>
         </div>
+
+        {user.isAnonymous && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <div className="text-sm font-bold text-amber-900 mb-1">Google 계정과 연결하기</div>
+            <p className="text-xs text-amber-800 leading-relaxed mb-3">지금 진도를 그대로 유지하면서 Google 계정으로 업그레이드해요. 다른 기기에서도 같은 진도를 볼 수 있어요.</p>
+            <button
+              onClick={handleLinkGoogle}
+              disabled={linking}
+              className="w-full py-2.5 bg-stone-900 text-white rounded-lg text-sm font-medium hover:bg-stone-800 disabled:opacity-40"
+            >
+              {linking ? '연결 중...' : 'Google 계정 연결'}
+            </button>
+          </div>
+        )}
 
         <div className="space-y-2 mb-8">
           {loading || roomsFetching ? (
@@ -724,6 +759,19 @@ function RoomView({ user, roomCode, onExit }) {
     } catch (e) { alert('내보내기 실패: ' + e.message); }
   }
 
+  async function handleChangeMyColor(newColorId) {
+    try {
+      const ref = doc(db, 'readingRooms', roomCode);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const newMembers = (data.members || []).map(m =>
+        m.uid === user.uid ? { ...m, colorId: newColorId } : m
+      );
+      await updateDoc(ref, { members: newMembers });
+    } catch (e) { alert('색상 변경 실패: ' + e.message); }
+  }
+
   async function copyCode() {
     try {
       await navigator.clipboard.writeText(roomCode);
@@ -891,6 +939,25 @@ function RoomView({ user, roomCode, onExit }) {
                 );
               })}
             </div>
+            <div className="mb-4">
+              <div className="text-[10px] text-stone-400 uppercase tracking-wider mb-2">내 색상 바꾸기</div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {COLORS.map(c => {
+                  const isMine = myMember?.colorId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => handleChangeMyColor(c.id)}
+                      className={`aspect-square rounded-lg border-2 transition-all ${isMine ? 'ring-2 ring-stone-900 ring-offset-1' : 'hover:opacity-80'}`}
+                      style={{ backgroundColor: c.bg, borderColor: c.border }}
+                      title={c.name}
+                      aria-label={c.name}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="bg-stone-50 rounded-xl p-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[10px] text-stone-400 uppercase tracking-wider">방 초대 코드</div>
