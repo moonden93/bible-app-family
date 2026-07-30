@@ -122,6 +122,25 @@ export default function PlanApp() {
   const [myRoomCodes, setMyRoomCodes] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [currentRoom, setCurrentRoom] = useState(null); // roomCode
+  const [resetting, setResetting] = useState(false);
+
+  // ?reset=1 로 접속 시 로그아웃 + 로컬 데이터 정리 후 로그인 화면부터
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === '1') {
+      setResetting(true);
+      (async () => {
+        try { await signOut(auth); } catch {}
+        try { sessionStorage.clear(); } catch {}
+        try {
+          const keep = localStorage.getItem('plan-name');
+          localStorage.clear();
+          if (keep) localStorage.setItem('plan-name', keep);
+        } catch {}
+        window.location.replace('/plan');
+      })();
+    }
+  }, []);
 
   useEffect(() => {
     clearStaleAuthState();
@@ -131,6 +150,8 @@ export default function PlanApp() {
     });
     return () => unsub();
   }, []);
+
+  if (resetting) return <Loading text="초기화 중..." />;
 
   useEffect(() => {
     if (!user) {
