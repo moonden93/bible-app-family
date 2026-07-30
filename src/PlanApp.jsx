@@ -5,7 +5,7 @@ import {
   doc, onSnapshot, setDoc, updateDoc, getDoc,
   arrayUnion, serverTimestamp
 } from 'firebase/firestore';
-import { LogOut, Copy, Plus, UserPlus, Check, ChevronLeft, Users, BookOpen } from 'lucide-react';
+import { LogOut, Copy, Plus, UserPlus, Check, ChevronLeft, Users, BookOpen, X } from 'lucide-react';
 
 // ============================================================
 // 성경 66권 · 장 수
@@ -705,6 +705,25 @@ function RoomView({ user, roomCode, onExit }) {
     } catch (e) { alert('실패: ' + e.message); }
   }
 
+  async function handleRemoveMember(m) {
+    if (!confirm(`${m.displayName}님을 방에서 내보내시겠습니까?\n그 사람의 진도도 함께 삭제됩니다.`)) return;
+    try {
+      const ref = doc(db, 'readingRooms', roomCode);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const newMembers = (data.members || []).filter(x => x.uid !== m.uid);
+      const newUids = (data.memberUids || []).filter(u => u !== m.uid);
+      const newReads = { ...(data.reads || {}) };
+      delete newReads[m.uid];
+      await updateDoc(ref, {
+        members: newMembers,
+        memberUids: newUids,
+        reads: newReads,
+      });
+    } catch (e) { alert('내보내기 실패: ' + e.message); }
+  }
+
   async function copyCode() {
     try {
       await navigator.clipboard.writeText(roomCode);
@@ -848,15 +867,26 @@ function RoomView({ user, roomCode, onExit }) {
             <div className="space-y-2 mb-4">
               {members.map(m => {
                 const c = colorOf(m.colorId);
+                const isMe = m.uid === user.uid;
                 return (
                   <div key={m.uid} className="flex items-center gap-3 py-2">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: c.border }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ backgroundColor: c.border }}>
                       {(m.displayName || '?')[0]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{m.displayName}{m.uid === user.uid && ' (나)'}</div>
-                      <div className="text-xs text-stone-400 truncate">{m.email}</div>
+                      <div className="text-sm font-medium truncate">{m.displayName}{isMe && ' (나)'}</div>
+                      <div className="text-xs text-stone-400 truncate">{m.email || '익명 계정'}</div>
                     </div>
+                    {!isMe && (
+                      <button
+                        onClick={() => handleRemoveMember(m)}
+                        className="shrink-0 p-1.5 text-stone-300 hover:text-red-500 hover:bg-red-50 rounded-md"
+                        title="방에서 내보내기"
+                        aria-label={`${m.displayName} 내보내기`}
+                      >
+                        <X size={16} strokeWidth={2} />
+                      </button>
+                    )}
                   </div>
                 );
               })}

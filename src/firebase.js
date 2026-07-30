@@ -11,7 +11,7 @@ import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC9IB7B9frc7lNH3OZhWSANt9YARSGowTo",
-  authDomain: "filsa-bible.web.app",
+  authDomain: "filsa-bible.firebaseapp.com",
   projectId: "filsa-bible",
   storageBucket: "filsa-bible.firebasestorage.app",
   messagingSenderId: "154299855402",
