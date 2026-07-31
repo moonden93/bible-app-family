@@ -219,9 +219,11 @@ function SignInScreen() {
     <div className="min-h-screen w-full bg-stone-50 flex items-center justify-center p-6" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
       <div className="max-w-sm w-full">
         <div className="text-center mb-10">
-          <div className="text-5xl mb-3">📖</div>
-          <h1 className="text-2xl font-bold tracking-tight mb-1">함께 통독</h1>
-          <p className="text-sm text-stone-500">친구와 성경을 매일 조금씩</p>
+          <div className="inline-block w-16 h-16 rounded-2xl mb-4 flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #1a2a3d, #0f1a29)' }}>
+            <span className="text-white text-xl font-semibold tracking-tight" style={{ fontFamily: "'Iowan Old Style', 'Charter', 'Palatino Linotype', 'Georgia', serif" }}>DeCA</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">DeCA 통독</h1>
+          <p className="text-sm text-stone-500">함께 성경을 매일 조금씩</p>
         </div>
 
         <button onClick={handleGoogleSignIn} disabled={loading} className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40">
