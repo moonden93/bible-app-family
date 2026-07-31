@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>성경 통독 · 119일</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="성경 통독">
+<meta name="theme-color" content="#F4EEE1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15110C" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    --ground: #F4EEE1;
+    --ground-2: #EEE7D5;
+    --card: #FBF7EC;
+    --ink: #1B1712;
+    --ink-mute: #605847;
+    --ink-dim: #9F9583;
+    --rule: #E2DAC6;
+    --rule-strong: #C9BFA6;
+    --accent: #A47A2E;
+    --accent-soft: rgba(164, 122, 46, 0.10);
+    --read: #4F6647;
+    --read-bg: #DEE4D2;
+    --focus: #A47A2E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #15110C;
+      --ground-2: #1A1610;
+      --card: #1F1B14;
+      --ink: #F0EADC;
+      --ink-mute: #A69C89;
+      --ink-dim: #6B6353;
+      --rule: #2C2618;
+      --rule-strong: #3D3624;
+      --accent: #CBAA61;
+      --accent-soft: rgba(203, 170, 97, 0.10);
+      --read: #85A171;
+      --read-bg: #263021;
+      --focus: #CBAA61;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #15110C;
+    --ground-2: #1A1610;
+    --card: #1F1B14;
+    --ink: #F0EADC;
+    --ink-mute: #A69C89;
+    --ink-dim: #6B6353;
+    --rule: #2C2618;
+    --rule-strong: #3D3624;
+    --accent: #CBAA61;
+    --accent-soft: rgba(203, 170, 97, 0.10);
+    --read: #85A171;
+    --read-bg: #263021;
+    --focus: #CBAA61;
+  }
+  :root[data-theme="light"] {
+    --ground: #F4EEE1;
+    --ground-2: #EEE7D5;
+    --card: #FBF7EC;
+    --ink: #1B1712;
+    --ink-mute: #605847;
+    --ink-dim: #9F9583;
+    --rule: #E2DAC6;
+    --rule-strong: #C9BFA6;
+    --accent: #A47A2E;
+    --accent-soft: rgba(164, 122, 46, 0.10);
+    --read: #4F6647;
+    --read-bg: #DEE4D2;
+    --focus: #A47A2E;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  body {
+    padding: 24px 18px calc(48px + env(safe-area-inset-bottom));
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .serif {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+  }
+  .tabular { font-variant-numeric: tabular-nums lining-nums; }
+
+  /* Masthead */
+  .masthead {
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 26px;
+  }
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  h1.title {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    margin: 0;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .progress-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .progress-num-block {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .progress-num {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-size: 44px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .progress-sep { color: var(--ink-dim); font-size: 22px; }
+  .progress-total {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    color: var(--ink-mute);
+    font-size: 18px;
+  }
+  .progress-unit {
+    font-size: 12px;
+    color: var(--ink-dim);
+    margin-left: 2px;
+  }
+  .progress-pct {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    color: var(--ink-mute);
+    font-weight: 500;
+  }
+  .progress-bar {
+    height: 3px;
+    background: var(--rule);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--read);
+    transition: width 420ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    border-radius: 999px;
+  }
+  .meta-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .current-pointer {
+    color: var(--accent);
+    font-weight: 600;
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+
+  /* Section head */
+  .section-head {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-dim);
+    font-weight: 700;
+    margin: 34px 0 12px;
+    padding: 0 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .section-head .count {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-dim);
+    font-weight: 500;
+    font-size: 11px;
+  }
+
+  /* Day card */
+  .day-card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px 13px;
+    margin-bottom: 8px;
+    transition: opacity 200ms ease;
+  }
+  .day-card.done {
+    background: transparent;
+    border-color: var(--rule);
+    opacity: 0.65;
+  }
+  .day-card.current {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    padding: 20px 20px 18px;
+    background: var(--card);
+    opacity: 1;
+    margin-bottom: 14px;
+  }
+  .day-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .day-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    color: var(--card);
+    background: var(--accent);
+    padding: 3px 7px 3px;
+    border-radius: 3px;
+    line-height: 1;
+    align-self: center;
+    margin-right: 2px;
+  }
+  .day-num {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .day-card.current .day-num { font-size: 24px; }
+  .day-card.done .day-num { color: var(--ink-mute); }
+  .day-date {
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.01em;
+  }
+  .day-card.done .day-date { color: var(--ink-dim); }
+  .day-count {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--ink-dim);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .day-count.complete { color: var(--read); }
+  .day-count.complete::before {
+    content: "✓ ";
+    font-weight: 700;
+  }
+
+  .day-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .book-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .book-name {
+    font-size: 12px;
+    color: var(--ink-mute);
+    font-weight: 600;
+    min-width: 52px;
+    flex-shrink: 0;
+  }
+  .day-card.current .book-name { font-size: 13px; color: var(--ink); }
+  .chapters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .chapter {
+    appearance: none;
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+    border: 1px solid var(--rule-strong);
+    background: transparent;
+    color: var(--ink-mute);
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-size: 13px;
+    font-weight: 500;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .day-card.current .chapter {
+    width: 38px;
+    height: 38px;
+    font-size: 14px;
+  }
+  .chapter:hover {
+    border-color: var(--ink-mute);
+    color: var(--ink);
+  }
+  .chapter:active { transform: scale(0.94); }
+  .chapter:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .chapter.checked {
+    background: var(--read);
+    color: var(--card);
+    border-color: var(--read);
+  }
+  .chapter.checked:hover {
+    background: var(--read);
+    color: var(--card);
+  }
+  :root[data-theme="dark"] .chapter.checked,
+  html:not([data-theme]) .chapter.checked {
+    /* keep readable in both */
+  }
+
+  /* Celebrate */
+  .celebrate {
+    padding: 40px 24px;
+    border: 1px solid var(--read);
+    background: var(--read-bg);
+    border-radius: 12px;
+    text-align: center;
+    margin-bottom: 22px;
+  }
+  .celebrate-mark {
+    font-family: 'Iowan Old Style', serif;
+    font-size: 40px;
+    color: var(--read);
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .celebrate-title {
+    font-family: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, 'Georgia', serif;
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+  .celebrate-sub {
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 42px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+  }
+  .footer-note {
+    max-width: 68%;
+    letter-spacing: 0.01em;
+  }
+  .reset-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink-dim);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 5px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .reset-btn:hover {
+    color: var(--ink-mute);
+    border-color: var(--rule-strong);
+  }
+  .reset-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 380px) {
+    .chapter { width: 32px; height: 32px; font-size: 12px; }
+    .day-card.current .chapter { width: 36px; height: 36px; font-size: 13px; }
+    h1.title { font-size: 20px; }
+    .progress-num { font-size: 38px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="title-row">
+    <h1 class="title">성경 통독 · 119일</h1>
+    <span class="subtitle">하루 10장 · 창세기부터</span>
+  </div>
+  <div class="progress-panel">
+    <div class="progress-num-block">
+      <span class="progress-num" data-el="num">0</span>
+      <span class="progress-sep">/</span>
+      <span class="progress-total" data-el="total">1189</span>
+      <span class="progress-unit">장</span>
+    </div>
+    <span class="progress-pct" data-el="pct">0%</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" data-el="fill" style="width:0%"></div></div>
+  <div class="meta-line">
+    <span data-el="range">시작 2026-07-26 · 완주 2026-11-21</span>
+    <span class="current-pointer" data-el="pointer"></span>
+  </div>
+</header>
+
+<section class="section-head">
+  <span>지금 읽을 일정</span>
+</section>
+<div data-el="now"></div>
+
+<section class="section-head">
+  <span>전체 일정</span>
+  <span class="count" data-el="doneCount">0 / 119일 완료</span>
+</section>
+<div data-el="list"></div>
+
+<footer class="footer">
+  <span class="footer-note">홈 화면에 추가하면 앱처럼 쓸 수 있어요. 친구와 링크를 공유하면 각자 기기에서 진도가 저장됩니다.</span>
+  <button class="reset-btn" type="button" data-el="reset">전체 초기화</button>
+</footer>
+
+<script>
+(() => {
+  const BOOKS = [
+    ['창세기', 50], ['출애굽기', 40], ['레위기', 27], ['민수기', 36], ['신명기', 34],
+    ['여호수아', 24], ['사사기', 21], ['룻기', 4], ['사무엘상', 31], ['사무엘하', 24],
+    ['열왕기상', 22], ['열왕기하', 25], ['역대상', 29], ['역대하', 36], ['에스라', 10],
+    ['느헤미야', 13], ['에스더', 10], ['욥기', 42], ['시편', 150], ['잠언', 31],
+    ['전도서', 12], ['아가', 8], ['이사야', 66], ['예레미야', 52], ['예레미야애가', 5],
+    ['에스겔', 48], ['다니엘', 12], ['호세아', 14], ['요엘', 3], ['아모스', 9],
+    ['오바댜', 1], ['요나', 4], ['미가', 7], ['나훔', 3], ['하박국', 3],
+    ['스바냐', 3], ['학개', 2], ['스가랴', 14], ['말라기', 4],
+    ['마태복음', 28], ['마가복음', 16], ['누가복음', 24], ['요한복음', 21], ['사도행전', 28],
+    ['로마서', 16], ['고린도전서', 16], ['고린도후서', 13], ['갈라디아서', 6], ['에베소서', 6],
+    ['빌립보서', 4], ['골로새서', 4], ['데살로니가전서', 5], ['데살로니가후서', 3], ['디모데전서', 6],
+    ['디모데후서', 4], ['디도서', 3], ['빌레몬서', 1], ['히브리서', 13], ['야고보서', 5],
+    ['베드로전서', 5], ['베드로후서', 3], ['요한1서', 5], ['요한2서', 1], ['요한3서', 1],
+    ['유다서', 1], ['요한계시록', 22]
+  ];
+
+  const ALL = [];
+  BOOKS.forEach(([book, count]) => {
+    for (let ch = 1; ch <= count; ch++) ALL.push({ book, ch });
+  });
+  const TOTAL = ALL.length; // 1189
+  const PER_DAY = 10;
+  const DAYS = Math.ceil(TOTAL / PER_DAY); // 119
+  const START = new Date(2026, 6, 26); // 2026-07-26 (KST 로컬)
+  const KEY = 'bible-119day-plan-v1';
+
+  const state = new Set();
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) JSON.parse(raw).forEach(i => state.add(i));
+  } catch (e) {}
+
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify([...state])); } catch (e) {}
+  }
+
+  const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+  function dayDate(d) {
+    const dt = new Date(START);
+    dt.setDate(dt.getDate() + d);
+    return dt;
+  }
+  function fmtDate(dt) {
+    return `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${WEEKDAYS[dt.getDay()]})`;
+  }
+  function fmtYMD(dt) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+  }
+
+  function dayBlocks(d) {
+    const start = d * PER_DAY;
+    const end = Math.min(start + PER_DAY, TOTAL);
+    const blocks = [];
+    let cur = null;
+    for (let i = start; i < end; i++) {
+      const c = ALL[i];
+      if (!cur || cur.book !== c.book) {
+        cur = { book: c.book, chapters: [] };
+        blocks.push(cur);
+      }
+      cur.chapters.push({ i, ch: c.ch });
+    }
+    return blocks;
+  }
+  function dayRange(d) {
+    const start = d * PER_DAY;
+    const end = Math.min(start + PER_DAY, TOTAL);
+    return { start, end, total: end - start };
+  }
+  function dayChecked(d) {
+    const { start, end } = dayRange(d);
+    let n = 0;
+    for (let i = start; i < end; i++) if (state.has(i)) n++;
+    return n;
+  }
+
+  function currentDay() {
+    for (let d = 0; d < DAYS; d++) {
+      const { start, end } = dayRange(d);
+      let all = true;
+      for (let i = start; i < end; i++) if (!state.has(i)) { all = false; break; }
+      if (!all) return d;
+    }
+    return DAYS;
+  }
+
+  const el = {
+    num: document.querySelector('[data-el="num"]'),
+    total: document.querySelector('[data-el="total"]'),
+    pct: document.querySelector('[data-el="pct"]'),
+    fill: document.querySelector('[data-el="fill"]'),
+    range: document.querySelector('[data-el="range"]'),
+    pointer: document.querySelector('[data-el="pointer"]'),
+    now: document.querySelector('[data-el="now"]'),
+    list: document.querySelector('[data-el="list"]'),
+    doneCount: document.querySelector('[data-el="doneCount"]'),
+    reset: document.querySelector('[data-el="reset"]')
+  };
+
+  const endDate = dayDate(DAYS - 1);
+  el.range.textContent = `시작 ${fmtYMD(START)} · 완주 ${fmtYMD(endDate)}`;
+  el.total.textContent = TOTAL.toLocaleString();
+
+  function completedDaysCount() {
+    let n = 0;
+    for (let d = 0; d < DAYS; d++) {
+      const { total } = dayRange(d);
+      if (dayChecked(d) === total) n++;
+    }
+    return n;
+  }
+
+  function renderDayCard(d, curD, opts = {}) {
+    const { start, end, total } = dayRange(d);
+    const checked = dayChecked(d);
+    const allDone = checked === total;
+    const isCurrent = d === curD;
+    const blocks = dayBlocks(d);
+    const cls = ['day-card'];
+    if (opts.forceCurrent || isCurrent) cls.push('current');
+    if (allDone && !isCurrent && !opts.forceCurrent) cls.push('done');
+
+    const blocksHTML = blocks.map(b => `
+      <div class="book-block">
+        <div class="book-name">${b.book}</div>
+        <div class="chapters">
+          ${b.chapters.map(c => `
+            <button
+              type="button"
+              class="chapter${state.has(c.i) ? ' checked' : ''}"
+              data-i="${c.i}"
+              data-d="${d}"
+              aria-pressed="${state.has(c.i) ? 'true' : 'false'}"
+              aria-label="${b.book} ${c.ch}장"
+            >${c.ch}</button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    const badge = (opts.forceCurrent || isCurrent) ? '<span class="badge">지금 읽기</span>' : '';
+    const countCls = allDone ? 'day-count complete' : 'day-count';
+    const countText = allDone ? '완료' : `${checked} / ${total}`;
+
+    return `
+      <article class="${cls.join(' ')}" data-card="${d}">
+        <div class="day-head">
+          <div class="day-title">
+            ${badge}
+            <span class="day-num">Day ${d + 1}</span>
+            <span class="day-date">${fmtDate(dayDate(d))}</span>
+          </div>
+          <span class="${countCls}" data-count>${countText}</span>
+        </div>
+        <div class="day-body">${blocksHTML}</div>
+      </article>
+    `;
+  }
+
+  function renderNow(curD) {
+    if (curD >= DAYS) {
+      el.now.innerHTML = `
+        <div class="celebrate">
+          <div class="celebrate-mark">✓</div>
+          <div class="celebrate-title">완주 축하합니다</div>
+          <div class="celebrate-sub">${DAYS}일 · 창세기부터 요한계시록까지</div>
+        </div>
+      `;
+    } else {
+      el.now.innerHTML = renderDayCard(curD, curD, { forceCurrent: true });
+    }
+  }
+
+  function updateHeader() {
+    const readCount = state.size;
+    const pct = (readCount / TOTAL) * 100;
+    el.num.textContent = readCount.toLocaleString();
+    el.fill.style.width = pct + '%';
+    const pctStr = pct === 0 ? '0%' : pct >= 10 ? pct.toFixed(0) + '%' : pct.toFixed(1) + '%';
+    el.pct.textContent = pctStr;
+    const curD = currentDay();
+    if (curD >= DAYS) {
+      el.pointer.textContent = '완주';
+    } else {
+      el.pointer.textContent = `Day ${curD + 1} · ${fmtDate(dayDate(curD))}`;
+    }
+    el.doneCount.textContent = `${completedDaysCount()} / ${DAYS}일 완료`;
+  }
+
+  function fullRender() {
+    const curD = currentDay();
+    updateHeader();
+    renderNow(curD);
+    let html = '';
+    for (let d = 0; d < DAYS; d++) html += renderDayCard(d, curD);
+    el.list.innerHTML = html;
+  }
+
+  let prevCurD = currentDay();
+
+  function onChapterClick(btn) {
+    const i = parseInt(btn.dataset.i, 10);
+    const d = parseInt(btn.dataset.d, 10);
+    if (state.has(i)) state.delete(i);
+    else state.add(i);
+    persist();
+
+    // 최소 재렌더: 같은 인덱스의 모든 버튼 상태 갱신
+    document.querySelectorAll(`.chapter[data-i="${i}"]`).forEach(b => {
+      const on = state.has(i);
+      b.classList.toggle('checked', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    // 해당 Day 카운트 갱신
+    const { total } = dayRange(d);
+    const checked = dayChecked(d);
+    const allDone = checked === total;
+    document.querySelectorAll(`[data-card="${d}"] [data-count]`).forEach(c => {
+      c.className = allDone ? 'day-count complete' : 'day-count';
+      c.textContent = allDone ? '완료' : `${checked} / ${total}`;
+    });
+    // done 스타일 갱신 (지금 읽기 카드 제외)
+    document.querySelectorAll(`[data-card="${d}"]`).forEach(card => {
+      if (card.classList.contains('current')) return;
+      card.classList.toggle('done', allDone);
+    });
+
+    updateHeader();
+
+    // 현재 Day가 바뀌면 전체 재렌더 (지금 읽기 카드 이동을 위해)
+    const nextCurD = currentDay();
+    if (nextCurD !== prevCurD) {
+      prevCurD = nextCurD;
+      const curD = nextCurD;
+      renderNow(curD);
+      // list의 current 표시만 갱신
+      document.querySelectorAll('[data-card]').forEach(card => {
+        const dd = parseInt(card.dataset.card, 10);
+        card.classList.toggle('current', dd === curD);
+        // done 스타일: current가 아닐 때만
+        const { total } = dayRange(dd);
+        const isDone = dayChecked(dd) === total;
+        card.classList.toggle('done', isDone && dd !== curD);
+        // badge 갱신
+        const title = card.querySelector('.day-title');
+        const existingBadge = title.querySelector('.badge');
+        if (dd === curD && !existingBadge) {
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = '지금 읽기';
+          title.insertBefore(b, title.firstChild);
+        } else if (dd !== curD && existingBadge) {
+          existingBadge.remove();
+        }
+      });
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chapter');
+    if (btn) { onChapterClick(btn); return; }
+    if (e.target === el.reset || el.reset.contains(e.target)) {
+      if (confirm('모든 체크를 지우고 처음부터 다시 시작하시겠습니까?')) {
+        state.clear();
+        persist();
+        prevCurD = currentDay();
+        fullRender();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  });
+
+  fullRender();
+})();
+</script>
+
+</body>
+</html>
