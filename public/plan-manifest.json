@@ -1,0 +1,26 @@
+{
+  "name": "함께 통독",
+  "short_name": "통독",
+  "description": "친구와 함께 성경 통독 진도 공유",
+  "start_url": "/plan",
+  "scope": "/plan",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#1c1917",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
